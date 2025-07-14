@@ -1,0 +1,12 @@
+final Map<String, String> arTranslation = {
+  "title": "كش ملك!",
+  "subtitle": "أفضل تجربة شطرنج",
+  "playOnline": "العب أونلاين",
+  "playWithComputer": "العب مع الكمبيوتر",
+  "playWithFriends": "العب مع الأصدقاء",
+  "chessPuzzles": "ألغاز الشطرنج",
+  "rankings": "الترتيب",
+  "settings": "الإعدادات",
+  "gamesPlayed": "لعبة خلال 24 ساعة",
+  "playersNow": "لاعب الآن"
+};
