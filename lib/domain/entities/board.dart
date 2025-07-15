@@ -44,7 +44,6 @@ abstract class Board with _$Board {
   }) = _Board;
 
   /// Factory constructor to set up the initial state of a chess board.
-  /// with the white player starting.
   factory Board.initialAsWhitePlayer() {
     final List<List<Piece?>> initialSquares = List.generate(
       8,
@@ -131,22 +130,30 @@ abstract class Board with _$Board {
 
 extension OnBoard on Board {
   /// Creates a deep copy of the board, including all pieces, for simulation purposes.
+  /// يُنشئ نسخة عميقة من اللوحة، بما في ذلك جميع القطع، لأغراض المحاكاة.
   Board copyWithDeepPieces() {
     final newSquares =
-        squares.map((row) => row.map((piece) => piece).toList()).toList();
-    // Also copy mutable maps/lists if they are directly mutable within the Board
-    // final newMoveHistory = List<Move>.from(moveHistory);
-    // final newKingPositions = Map<PieceColor, Cell>.from(kingPositions);
-    // final newCastlingRights = castlingRights.map(
-    //   (key, value) => MapEntry(key, Map<CastlingSide, bool>.from(value)),
-    // );
+        squares
+            .map(
+              (row) =>
+                  row
+                      .map((piece) => piece == null ? piece : piece.copyWith())
+                      .toList(),
+            )
+            .toList(); // نسخ القطع هنا
+
+    // نسخ الخرائط المتغيرة بشكل عميق لضمان عدم وجود مراجع مشتركة
+    final newMoveHistory = List<Move>.from(moveHistory);
+    final newKingPositions = Map<PieceColor, Cell>.from(kingPositions);
+    final newCastlingRights = castlingRights.map(
+      (key, value) => MapEntry(key, Map<CastlingSide, bool>.from(value)),
+    );
 
     return copyWith(
       squares: newSquares,
-      moveHistory: moveHistory,
-      kingPositions: kingPositions,
-      castlingRights: castlingRights,
-      //! new added for test
+      moveHistory: newMoveHistory, // استخدم النسخة العميقة
+      kingPositions: newKingPositions, // استخدم النسخة العميقة
+      castlingRights: newCastlingRights, // استخدم النسخة العميقة
       currentPlayer: currentPlayer,
       enPassantTarget: enPassantTarget,
       fullMoveNumber: fullMoveNumber,
@@ -162,11 +169,63 @@ extension OnBoard on Board {
     return null;
   }
 
-  /// Returns a new Board instance with a piece placed (or removed if piece is null)
-  /// at the specified cell. This is an immutable update.
+  /// يُرجع مثيل Board جديدًا مع وضع قطعة (أو إزالتها إذا كانت القطعة null)
+  /// في الخلية المحددة. هذا تحديث غير قابل للتغيير.
   Board placePiece(Cell cell, Piece? piece) {
     final newSquares = squares.map((row) => List<Piece?>.from(row)).toList();
     newSquares[cell.row][cell.col] = piece;
     return copyWith(squares: newSquares);
+  }
+
+  /// يتحقق مما إذا كان الملك للّون المحدد في حالة كش (Check).
+  bool isKingInCheck(PieceColor kingColor) {
+    final kingPosition = kingPositions[kingColor];
+    if (kingPosition == null) return false; // لا ينبغي أن يحدث في لعبة عادية
+
+    // تحقق مما إذا كانت أي قطعة للخصم تهدد مربع الملك
+    final opponentColor =
+        kingColor == PieceColor.white ? PieceColor.black : PieceColor.white;
+    for (int r = 0; r < 8; r++) {
+      for (int c = 0; c < 8; c++) {
+        final currentCell = Cell(row: r, col: c);
+        final piece = getPieceAt(currentCell);
+        if (piece != null && piece.color == opponentColor) {
+          // نحتاج إلى الحصول على الحركات الأولية للقطعة المهاجمة
+          // لا نستخدم getLegalMoves هنا لأننا نريد جميع الهجمات، حتى لو كانت تضع ملك المهاجم في كش
+          // (مثل دبوس على قطعة الخصم)
+          final attackingMoves = piece.getRawMoves(this, currentCell);
+          for (var move in attackingMoves) {
+            if (move.end == kingPosition) {
+              return true; // الملك في كش
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  /// يتحقق مما إذا كانت الخلية المحددة مهددة من قبل قطع الخصم.
+  /// تُستخدم للتحقق من شرعية التبييت.
+  bool isCellUnderAttack(PieceColor playerColor, Cell cell) {
+    final opponentColor =
+        playerColor == PieceColor.white ? PieceColor.black : PieceColor.white;
+
+    for (int r = 0; r < 8; r++) {
+      for (int c = 0; c < 8; c++) {
+        final currentCell = Cell(row: r, col: c);
+        final piece = getPieceAt(currentCell);
+        if (piece != null && piece.color == opponentColor) {
+          // الحصول على جميع الحركات الأولية للقطعة (التهديدات)
+          final attackingMoves = piece.getRawMoves(this, currentCell);
+          for (var move in attackingMoves) {
+            if (move.end == cell) {
+              return true; // الخلية مهددة
+            }
+          }
+        }
+      }
+    }
+    return false;
   }
 }

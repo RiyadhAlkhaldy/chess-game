@@ -20,6 +20,7 @@ Map<String, dynamic> _$PieceToJson(_Piece instance) => <String, dynamic>{
 
 const _$PieceColorEnumMap = {
   PieceColor.white: 'white',
+  PieceColor.random: 'random',
   PieceColor.black: 'black',
 };
 

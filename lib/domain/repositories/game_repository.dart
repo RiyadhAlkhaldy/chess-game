@@ -1,26 +1,61 @@
 // lib/domain/repositories/game_repository.dart
-import 'package:dartz/dartz.dart'; // For Either and Tuple2
+
 import '../entities/board.dart';
-import '../entities/move.dart';
-import '../entities/game_result.dart';
 import '../entities/cell.dart';
-import '../../core/failures.dart';
+import '../entities/move.dart';
+import '../entities/piece.dart';
+import '../entities/game_result.dart';
 
-/// Abstract interface for managing game state and operations.
-/// This defines the contract that concrete implementations in the data layer must fulfill.
+/// واجهة توفر طرق التفاعل مع منطق لعبة الشطرنج.
+/// هذه الواجهة تحدد العمليات التي يمكن أن يقوم بها نظام إدارة اللعبة.
 abstract class GameRepository {
-  /// Applies a given move to the current board state and returns the new board and game result.
-  Future<Either<Failure, Tuple2<Board, GameResult>>> applyMove(Board currentBoard, Move move, Either<Failure, List<Move>>? legalMovesResult);
+  /// الحصول على حالة اللوحة الحالية.
+  Board getCurrentBoard();
 
-  /// Retrieves all legal moves for a piece at a given starting cell on the board.
-  Future<Either<Failure, List<Move>>> getLegalMovesForPiece(Board board, Cell startCell);
+  /// الحصول على جميع الحركات القانونية الممكنة للقطعة في الخلية المحددة.
+  /// تعيد قائمة بالحركات القانونية.
+  List<Move> getLegalMoves(Cell cell);
 
-  /// Finds the best possible move for the AI given the current board state and search depth.
-  Future<Either<Failure, Move>> getBestAIMove(Board board, int depth);
+  /// تنفيذ حركة معينة على اللوحة.
+  /// [move] هي الحركة المراد تنفيذها.
+  /// تعيد [Board] جديدة بعد تنفيذ الحركة.
+  Board makeMove(Move move);
 
-  /// Loads a previously saved game state.
-  Future<Either<Failure, Board>> loadGame();
+  /// التحقق مما إذا كان الملك في حالة كش (Check) للّاعب الحالي.
+  bool isKingInCheck(PieceColor kingColor);
 
-  /// Saves the current game state.
-  Future<Either<Failure, Unit>> saveGame(Board board);
+  /// الحصول على نتيجة اللعبة الحالية (مثل كش ملك، تعادل، طريق مسدود).
+  GameResult getGameResult();
+
+  /// إعادة تعيين اللعبة إلى حالتها الأولية.
+  void resetGame();
+
+  /// محاكاة حركة على لوحة مؤقتة للتحقق من شرعيتها.
+  /// [board] اللوحة الحالية للمحاكاة.
+  /// [move] الحركة المراد محاكاتها.
+  /// تعيد [Board] جديدة بعد المحاكاة.
+  Board simulateMove(Board board, Move move);
+
+  /// التحقق مما إذا كانت الحركة تضع الملك في خطر (كش).
+  /// [board] اللوحة الحالية.
+  /// [move] الحركة المراد التحقق منها.
+  bool isMoveResultingInCheck(Board board, Move move);
+
+  /// الحصول على جميع الحركات القانونية للّاعب الحالي.
+  List<Move> getAllLegalMovesForCurrentPlayer();
+
+  /// التحقق مما إذا كانت هناك أي حركات قانونية للّاعب الحالي.
+  bool hasAnyLegalMoves(PieceColor playerColor);
+
+  /// التحقق من قواعد التعادل مثل قاعدة الخمسين حركة أو التكرار الثلاثي.
+  GameOutcome? checkForDrawConditions();
+
+  /// التحقق من حالة الكش ملك أو الطريق المسدود.
+  GameResult checkGameEndConditions();
+
+  /// الحصول على حركة مقترحة من الذكاء الاصطناعي.
+  /// [board] هي اللوحة الحالية.
+  /// [aiPlayerColor] هو لون اللاعب الذي يلعب به الذكاء الاصطناعي.
+  /// تعيد [Move] المقترحة.
+  Future<Move?> getAiMove(Board board, PieceColor aiPlayerColor);
 }

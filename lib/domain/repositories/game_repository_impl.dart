@@ -1,717 +1,1073 @@
 // lib/data/repositories/game_repository_impl.dart
-import 'package:dartz/dartz.dart'; // For Either and Tuple2
+
 import 'package:flutter/material.dart';
 
-import '../../../core/failures.dart';
-import '../../data/ai_engine.dart';
-import '../../data/local_storage_service.dart';
-import '../entities/board.dart';
-import '../entities/cell.dart';
-import '../entities/game_result.dart';
-import '../entities/move.dart';
-import '../entities/piece.dart';
-import 'game_repository.dart';
+// import 'package:collection/collection.dart'; // لتسهيل مقارنة القوائم
 
-/// Concrete implementation of the [GameRepository] interface.
-/// It handles the actual game logic, interaction with AI, and local storage.
-/// إنه يتعامل مع منطق اللعبة الفعلي والتفاعل مع الذكاء الاصطناعي والتخزين المحلي.
+import '../../domain/entities/board.dart';
+import '../../domain/entities/cell.dart';
+import '../../domain/entities/game_result.dart';
+import '../../domain/entities/move.dart';
+import '../../domain/entities/piece.dart';
+import '../../domain/repositories/game_repository.dart';
+
+/// تطبيق [GameRepository] الذي يحتوي على منطق لعبة الشطرنج الفعلي.
 class GameRepositoryImpl implements GameRepository {
-  final LocalStorageService localStorageService;
-  final AIEngine aiEngine; // Dependency on the AI engine
+  Board _currentBoard;
+  List<Board> _boardHistory = []; // لتتبع تكرار اللوحة
 
-  GameRepositoryImpl(this.localStorageService, this.aiEngine);
+  /// مُنشئ لـ [GameRepositoryImpl]. يبدأ اللعبة بلوحة أولية للاعب الأبيض.
+  GameRepositoryImpl() : _currentBoard = Board.initialAsWhitePlayer() {
+    _boardHistory.add(_currentBoard);
+  }
 
   @override
-  Future<Either<Failure, Tuple2<Board, GameResult>>> applyMove(
-    Board currentBoard,
-    Move move,
-    Either<Failure, List<Move>>? legalMovesResult,
-  ) async {
-    // try {
-    final pieceToMove = currentBoard.getPieceAt(move.start);
+  Board getCurrentBoard() {
+    return _currentBoard;
+  }
 
-    // Basic validation: piece exists and belongs to current player
-    if (pieceToMove == null ||
-        pieceToMove.color != currentBoard.currentPlayer) {
-      return Left(
-        InvalidMoveFailure(message: 'No piece at start cell or not your turn.'),
+  @override
+  List<Move> getLegalMoves(Cell cell) {
+    final piece = _currentBoard.getPieceAt(cell);
+    if (piece == null || piece.color != _currentBoard.currentPlayer) {
+      return []; // لا توجد قطعة أو ليست قطعة اللاعب الحالي
+    }
+
+    // الحصول على الحركات الأولية للقطعة (بغض النظر عن الكش)
+    final rawMoves = piece.getRawMoves(_currentBoard, cell);
+
+    // تصفية الحركات لإزالة تلك التي تضع الملك في كش
+    final legalMoves =
+        rawMoves.where((move) {
+          return !isMoveResultingInCheck(_currentBoard, move);
+        }).toList();
+
+    // إضافة حركات الكاستلينج القانونية (يتم التحقق منها هنا بشكل كامل)
+    if (piece.type == PieceType.king) {
+      _addCastlingMoves(legalMoves, cell, piece.color);
+    }
+    // إضافة حركات En Passant القانونية (يتم التحقق منها هنا بشكل كامل)
+    if (piece.type == PieceType.pawn) {
+      _addEnPassantMoves(legalMoves, cell, piece.color);
+    }
+
+    return legalMoves;
+  }
+
+  /// دالة مساعدة خاصة لإضافة حركات الكاستلينج بعد التحقق من شرعيتها.
+  /// الكاستلينج له قواعد خاصة لا يمكن التحقق منها فقط من خلال getRawMoves.
+  void _addCastlingMoves(
+    List<Move> moves,
+    Cell kingCell,
+    PieceColor kingColor,
+  ) {
+    if (kingColor != _currentBoard.currentPlayer) return;
+    if (_currentBoard.isKingInCheck(kingColor)) {
+      return; // لا يمكن الكاستلينج إذا كان الملك في كش
+    }
+
+    final int kingRow = kingColor == PieceColor.white ? 7 : 0;
+
+    // الكاستلينج لجهة الملك (King-side Castling)
+    if (_currentBoard.castlingRights[kingColor]![CastlingSide.kingSide]!) {
+      final Cell rookCell = Cell(row: kingRow, col: 7);
+      final Piece? rook = _currentBoard.getPieceAt(rookCell);
+
+      if (rook is Rook &&
+          !rook.hasMoved &&
+          _currentBoard.getPieceAt(Cell(row: kingRow, col: 5)) == null &&
+          _currentBoard.getPieceAt(Cell(row: kingRow, col: 6)) == null) {
+        // التحقق من أن المربعات التي يمر بها الملك ليست مهددة
+        if (!_currentBoard.isCellUnderAttack(
+              kingColor,
+              Cell(row: kingRow, col: 5),
+            ) &&
+            !_currentBoard.isCellUnderAttack(
+              kingColor,
+              Cell(row: kingRow, col: 6),
+            )) {
+          moves.add(
+            Move(
+              start: kingCell,
+              end: Cell(row: kingRow, col: 6),
+              isCastling: true,
+            ),
+          );
+        }
+      }
+    }
+
+    // الكاستلينج لجهة الملكة (Queen-side Castling)
+    if (_currentBoard.castlingRights[kingColor]![CastlingSide.queenSide]!) {
+      final Cell rookCell = Cell(row: kingRow, col: 0);
+      final Piece? rook = _currentBoard.getPieceAt(rookCell);
+
+      if (rook is Rook &&
+          !rook.hasMoved &&
+          _currentBoard.getPieceAt(Cell(row: kingRow, col: 3)) == null &&
+          _currentBoard.getPieceAt(Cell(row: kingRow, col: 2)) == null &&
+          _currentBoard.getPieceAt(Cell(row: kingRow, col: 1)) == null) {
+        // التحقق من أن المربعات التي يمر بها الملك ليست مهددة
+        if (!_currentBoard.isCellUnderAttack(
+              kingColor,
+              Cell(row: kingRow, col: 3),
+            ) &&
+            !_currentBoard.isCellUnderAttack(
+              kingColor,
+              Cell(row: kingRow, col: 2),
+            )) {
+          moves.add(
+            Move(
+              start: kingCell,
+              end: Cell(row: kingRow, col: 2),
+              isCastling: true,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  /// دالة مساعدة خاصة لإضافة حركات الـ En Passant بعد التحقق من شرعيتها.
+  void _addEnPassantMoves(
+    List<Move> moves,
+    Cell pawnCell,
+    PieceColor pawnColor,
+  ) {
+    if (_currentBoard.enPassantTarget == null) return;
+
+    final int direction = pawnColor == PieceColor.white ? -1 : 1;
+    final int targetRow = pawnCell.row + direction;
+
+    // تحقق من الخلايا المجاورة للبيدق لعملية الـ En Passant
+    final List<Cell> adjacentCells = [
+      Cell(row: pawnCell.row, col: pawnCell.col - 1),
+      Cell(row: pawnCell.row, col: pawnCell.col + 1),
+    ];
+
+    for (final adjacentCell in adjacentCells) {
+      if (adjacentCell.isValid()) {
+        final Piece? adjacentPiece = _currentBoard.getPieceAt(adjacentCell);
+        if (adjacentPiece is Pawn &&
+            adjacentPiece.color != pawnColor &&
+            _currentBoard.enPassantTarget ==
+                Cell(row: targetRow, col: adjacentCell.col) &&
+            _currentBoard.moveHistory.isNotEmpty) {
+          // التحقق مما إذا كانت الحركة الأخيرة هي حركة بيدق مزدوجة للبيدق المستهدف
+          final lastMove = _currentBoard.moveHistory.last;
+          if (lastMove.isTwoStepPawnMove && lastMove.end == adjacentCell) {
+            moves.add(
+              Move(
+                start: pawnCell,
+                end: _currentBoard.enPassantTarget!,
+                isEnPassant: true,
+                isCapture: true, // En Passant هو نوع من أنواع الأسر
+              ),
+            );
+          }
+        }
+      }
+    }
+  }
+
+  @override
+  Board makeMove(Move move) {
+    Board newBoard = _currentBoard.copyWithDeepPieces();
+    final Piece? pieceToMove = newBoard.getPieceAt(move.start);
+
+    if (pieceToMove == null) {
+      debugPrint("خطأ: لا توجد قطعة في خلية البداية.");
+      return _currentBoard; // لا تفعل شيئًا إذا لم تكن هناك قطعة
+    }
+
+    // تحديث hasMoved للقطعة التي تتحرك
+    final Piece updatedPiece = pieceToMove.copyWith(hasMoved: true);
+    newBoard = newBoard.placePiece(move.end, updatedPiece);
+    newBoard = newBoard.placePiece(
+      move.start,
+      null,
+    ); // إزالة القطعة من الخلية الأصلية
+
+    // منطق الـ En Passant
+    Cell? newEnPassantTarget;
+    if (move.isTwoStepPawnMove && pieceToMove.type == PieceType.pawn) {
+      final int direction = pieceToMove.color == PieceColor.white ? 1 : -1;
+      newEnPassantTarget = Cell(
+        row: move.end.row + direction,
+        col: move.end.col,
       );
     }
 
-    // Check if the move is actually legal for this piece (important validation)
-    legalMovesResult ??= await getLegalMovesForPiece(currentBoard, move.start);
-    if (legalMovesResult.isLeft()) {
-      debugPrint(
-        "in GameRepositoryImpl applyMove legalMovesResult isLeft ${legalMovesResult.fold((l) => l.message, (r) => 'Success')}",
+    if (move.isEnPassant) {
+      final int capturedPawnRow =
+          pieceToMove.color == PieceColor.white
+              ? move.end.row + 1
+              : move.end.row - 1;
+      final Cell capturedPawnCell = Cell(
+        row: capturedPawnRow,
+        col: move.end.col,
       );
-      return Left(
-        legalMovesResult.fold(
-          (l) => l,
-          (r) => throw Exception("Unexpected state"),
-        ),
-      );
-    }
-    final legalMoves = legalMovesResult.getOrElse(() => []);
-    debugPrint("in GameRepositoryImpl applyMove legalMoves $legalMoves \n");
-
-    // Find the exact legal move from the list (important for promotion, castling, en passant flags)
-    final actualLegalMove = legalMoves.firstWhereOrNull(
-      (m) => m.start == move.start && m.end == move.end,
-    );
-
-    debugPrint(
-      "in GameRepositoryImpl applyMove actualLegalMove $actualLegalMove \n",
-    );
-
-    if (actualLegalMove == null) {
-      return Left(InvalidMoveFailure(message: 'Illegal move.'));
+      newBoard = newBoard.placePiece(
+        capturedPawnCell,
+        null,
+      ); // إزالة البيدق المأسور
     }
 
-    // Create a new board state to apply the move immutably
-    Board newBoard = currentBoard.copyWithDeepPieces();
-
-    if (pieceToMove.type == PieceType.king) {
-      // Handle special moves
-      if (actualLegalMove.isCastling) {
-        // Move the rook during castling
-        final rookRow = actualLegalMove.start.row;
-        final rookStartCol =
-            actualLegalMove.end.col == 6 ? 7 : 0; // King-side: 7, Queen-side: 0
-        final rookEndCol =
-            actualLegalMove.end.col == 6 ? 5 : 3; // King-side: 5, Queen-side: 3
-        final rook = newBoard.getPieceAt(Cell(row: rookRow, col: rookStartCol));
-
+    // منطق الكاستلينج
+    if (move.isCastling && pieceToMove.type == PieceType.king) {
+      final int kingRow = pieceToMove.color == PieceColor.white ? 7 : 0;
+      if (move.end.col == 6) {
+        // King-side castling
+        final Cell oldRookCell = Cell(row: kingRow, col: 7);
+        final Cell newRookCell = Cell(row: kingRow, col: 5);
+        final Rook? rook = newBoard.getPieceAt(oldRookCell) as Rook?;
         if (rook != null) {
-          newBoard = newBoard
-              .placePiece(Cell(row: rookRow, col: rookStartCol), null)
-              .placePiece(
-                Cell(row: rookRow, col: rookEndCol),
-                rook.copyWith(hasMoved: true),
-              )
-              .copyWith(
-                kingPositions: Map.from(newBoard.kingPositions)
-                  ..update(newBoard.currentPlayer, (value) => move.end),
-              );
+          final Rook updatedRook = rook.copyWith(hasMoved: true);
+          newBoard = newBoard.placePiece(newRookCell, updatedRook);
+          newBoard = newBoard.placePiece(oldRookCell, null);
+        }
+      } else if (move.end.col == 2) {
+        // Queen-side castling
+        final Cell oldRookCell = Cell(row: kingRow, col: 0);
+        final Cell newRookCell = Cell(row: kingRow, col: 3);
+        final Rook? rook = newBoard.getPieceAt(oldRookCell) as Rook?;
+        if (rook != null) {
+          final Rook updatedRook = rook.copyWith(hasMoved: true);
+          newBoard = newBoard.placePiece(newRookCell, updatedRook);
+          newBoard = newBoard.placePiece(oldRookCell, null);
+        }
+      }
+    }
+
+    // منطق ترقية البيدق
+    if (move.isPromotion && pieceToMove.type == PieceType.pawn) {
+      // افتراض الترقية إلى ملكة إذا لم يحدد نوع آخر (يمكن توسيع هذا لاحقًا)
+      final promotedPiece = Queen(
+        color: pieceToMove.color,
+        type: PieceType.queen,
+        hasMoved: true,
+      );
+      newBoard = newBoard.placePiece(move.end, promotedPiece);
+    }
+
+    // تحديث حقوق الكاستلينج بعد حركة الملك أو الرخ
+    Map<PieceColor, Map<CastlingSide, bool>> newCastlingRights = Map.from(
+      newBoard.castlingRights,
+    );
+
+    // إذا تحرك الملك، يفقد حقوق الكاستلينج
+    if (pieceToMove.type == PieceType.king) {
+      newCastlingRights[pieceToMove.color] = {
+        CastlingSide.kingSide: false,
+        CastlingSide.queenSide: false,
+      };
+    }
+
+    // إذا تحرك الرخ من موضعه الأصلي، يفقد حقوق الكاستلينج لتلك الجهة
+    if (pieceToMove.type == PieceType.rook) {
+      if (pieceToMove.color == PieceColor.white) {
+        if (move.start == const Cell(row: 7, col: 0)) {
+          // رخ أبيض يسار
+          newCastlingRights[PieceColor.white]![CastlingSide.queenSide] = false;
+        } else if (move.start == const Cell(row: 7, col: 7)) {
+          // رخ أبيض يمين
+          newCastlingRights[PieceColor.white]![CastlingSide.kingSide] = false;
         }
       } else {
-        newBoard = newBoard
-            .placePiece(move.start, null)
-            .placePiece(move.end, pieceToMove.copyWith(hasMoved: true))
-            .copyWith(
-              kingPositions: Map.from(newBoard.kingPositions)
-                ..update(currentBoard.currentPlayer, (value) => move.end),
-            );
-      }
-    } else {
-      // Perform the move: remove piece from start, place at end
-      newBoard = newBoard
-          .placePiece(move.start, null)
-          .placePiece(move.end, pieceToMove.copyWith(hasMoved: true));
-
-      if (actualLegalMove.isEnPassant) {
-        // Remove the captured pawn for en passant
-        final capturedPawnCell = Cell(
-          row: actualLegalMove.start.row,
-          col: actualLegalMove.end.col,
-        );
-        newBoard = newBoard.placePiece(capturedPawnCell, null);
-      } else if (move.isPromotion && move.promotedPieceType != null) {
-        // Replace pawn with the promoted piece
-        newBoard = newBoard.placePiece(
-          move.end,
-          Piece.create(color: pieceToMove.color, type: move.promotedPieceType!),
-        );
+        // Black rook
+        if (move.start == const Cell(row: 0, col: 0)) {
+          // رخ أسود يسار
+          newCastlingRights[PieceColor.black]![CastlingSide.queenSide] = false;
+        } else if (move.start == const Cell(row: 0, col: 7)) {
+          // رخ أسود يمين
+          newCastlingRights[PieceColor.black]![CastlingSide.kingSide] = false;
+        }
       }
     }
-    // Update board properties for the new state
-    // Switch the current player
-    // Note: This assumes the move is valid and has been checked against legal moves
-    newBoard = _switchCurrentPlayer(
-      newBoard,
-      currentBoard,
-      actualLegalMove,
-      pieceToMove,
-    );
-    final gameResult = await _checkGameStatus(newBoard);
-    debugPrint("in GameRepositoryImpl applyMove last newBoard $newBoard \n");
-    // Check the new game status
+    // إذا تم أسر الرخ، يفقد حقوق الكاستلينج للخصم لتلك الجهة
+    if (move.isCapture) {
+      // تحقق من الرخ الذي تم أسره (إذا كان رخ)
+      if (move.end == const Cell(row: 0, col: 0)) {
+        // رخ أسود يسار
+        newCastlingRights[PieceColor.black]![CastlingSide.queenSide] = false;
+      } else if (move.end == const Cell(row: 0, col: 7)) {
+        // رخ أسود يمين
+        newCastlingRights[PieceColor.black]![CastlingSide.kingSide] = false;
+      } else if (move.end == const Cell(row: 7, col: 0)) {
+        // رخ أبيض يسار
+        newCastlingRights[PieceColor.white]![CastlingSide.queenSide] = false;
+      } else if (move.end == const Cell(row: 7, col: 7)) {
+        // رخ أبيض يمين
+        newCastlingRights[PieceColor.white]![CastlingSide.kingSide] = false;
+      }
+    }
 
-    return Right(Tuple2(newBoard, gameResult));
-    // } catch (e) {
-    //   return Left(GameFailure(message: 'Failed to apply move: $e'));
-    // }
-  }
+    // تحديث مواضع الملك
+    Map<PieceColor, Cell> newKingPositions = Map.from(newBoard.kingPositions);
+    if (pieceToMove.type == PieceType.king) {
+      newKingPositions[pieceToMove.color] = move.end;
+    }
 
-  Board _switchCurrentPlayer(
-    Board newBoard,
-    Board currentBoard,
-    Move actualLegalMove,
-    Piece? pieceToMove,
-  ) {
-    final nextPlayer =
-        currentBoard.currentPlayer == PieceColor.white
+    // تحديث HalfMoveClock
+    int newHalfMoveClock = newBoard.halfMoveClock + 1;
+    if (pieceToMove.type == PieceType.pawn || move.isCapture) {
+      newHalfMoveClock = 0; // إعادة تعيين العداد عند حركة بيدق أو أسر
+    }
+
+    // تحديث FullMoveNumber
+    int newFullMoveNumber = newBoard.fullMoveNumber;
+    if (newBoard.currentPlayer == PieceColor.black) {
+      newFullMoveNumber++; // يزداد بعد حركة اللاعب الأسود
+    }
+
+    // تحديث اللاعب الحالي
+    final PieceColor nextPlayer =
+        _currentBoard.currentPlayer == PieceColor.white
             ? PieceColor.black
             : PieceColor.white;
-    return newBoard.copyWith(
+
+    newBoard = newBoard.copyWith(
+      moveHistory: List.from(_currentBoard.moveHistory)..add(move),
       currentPlayer: nextPlayer,
-      moveHistory:
-          currentBoard.moveHistory, // Add the actual legal move with its flags
-      kingPositions:
-          newBoard.kingPositions, // Update king position if king moved
-      enPassantTarget:
-          actualLegalMove.isTwoStepPawnMove
-              ? Cell(
-                row: (actualLegalMove.start.row + actualLegalMove.end.row) ~/ 2,
-                col: actualLegalMove.start.col,
-              )
-              : null, // Set en passant target if pawn moved two squares
-      halfMoveClock:
-          actualLegalMove.isCapture || pieceToMove!.type == PieceType.pawn
-              ? 0
-              : newBoard.halfMoveClock + 1, // Reset on capture/pawn move
-      fullMoveNumber:
-          nextPlayer == PieceColor.white
-              ? newBoard.fullMoveNumber + 1
-              : newBoard
-                  .fullMoveNumber, // Increment full move number after Black's move
-      // castlingRights: _updateCastlingRights(
-      //   newBoard.castlingRights,
-      //   actualLegalMove,
-      //   pieceToMove!.color,
-      // ), // Update castling rights
+      enPassantTarget: newEnPassantTarget,
+      castlingRights: newCastlingRights,
+      kingPositions: newKingPositions,
+      halfMoveClock: newHalfMoveClock,
+      fullMoveNumber: newFullMoveNumber,
     );
-  }
 
-  Future<Either<Failure, List<Move>>> getLegalMovesForPieces(
-    Board board,
-    Cell startCell,
-  ) async {
-    final piece = board.getPieceAt(startCell);
-    if (piece == null) {
-      return Left(InvalidInputFailure(message: 'No piece at selected cell.'));
-    }
+    _currentBoard = newBoard;
+    _boardHistory.add(_currentBoard); // إضافة اللوحة الجديدة إلى سجل التاريخ
 
-    // 1. Get all raw moves for the piece
-    final rawMoves = piece.getRawMoves(board, startCell);
-
-    final legalMoves = <Move>[];
-
-    // 2. Filter out moves that leave the king in check
-    for (final move in rawMoves) {
-      final simulatedBoard = _simulateMove(
-        board,
-        move,
-        piece.type,
-        piece.color,
-      ); // Pass piece type/color for king position update
-      if (!aiEngine.isKingInCheckWithMoveCastling(
-        simulatedBoard,
-        piece.color,
-        move,
-      )) {
-        legalMoves.add(move);
-      }
-    }
-
-    return Right(legalMoves);
+    return _currentBoard;
   }
 
   @override
-  Future<Either<Failure, List<Move>>> getLegalMovesForPiece(
-    Board board,
-    Cell startCell,
-  ) async {
-    // try {
-    final piece = board.getPieceAt(startCell);
-    if (piece == null) {
-      return Left(InvalidInputFailure(message: 'No piece at selected cell.'));
-    }
-
-    // 1. Get all raw moves for the piece
-    final rawMoves = piece.getRawMoves(board, startCell);
-
-    final legalMoves = <Move>[];
-
-    // 2. Filter out moves that leave the king in check
-    for (final move in rawMoves) {
-      final simulatedBoard = _simulateMove(
-        board,
-        move,
-        piece.type,
-        piece.color,
-      ); // Pass piece type/color for king position update
-      // debugPrint("in GameRepositoryImpl simulatedBoard $simulatedBoard \n");
-      //
-      if (!aiEngine.isKingInCheckWithMoveCastling(
-        simulatedBoard,
-        piece.color,
-        move,
-      )) {
-        legalMoves.add(move);
-      }
-      debugPrint("in GameRepositoryImpl isKingInCheck  \n");
-    }
-
-    // 3. Add/Validate special moves that require more complex board state checks
-    //    (Castling and En Passant need special handling here as their legality
-    //     goes beyond just not being in check after the move).
-
-    // Castling specific checks (not just king being in check after move, but passing through check)
-    if (piece.type == PieceType.king) {
-      _addLegalCastlingMoves(board, piece.color, legalMoves);
-    }
-
-    // En Passant specific validation (ensure previous move enabled it)
-    // Filter out invalid en passant moves (those generated by raw moves but not actually legal)
-    // legalMoves.removeWhere(
-    //   (move) => move.isEnPassant && !_isValidEnPassant(board, move),
-    // );
-
-    return Right(legalMoves);
-    // } catch (e) {
-    //   return Left(GameFailure(message: 'Failed to get legal moves: $e'));
-    // }
+  bool isKingInCheck(PieceColor kingColor) {
+    return _currentBoard.isKingInCheck(kingColor);
   }
 
-  /// Simulates a move on a deep copy of the board. Used for checking if a move leads to check.
-  Board _simulateMove(
-    Board originalBoard,
-    Move move,
-    PieceType pieceType,
-    PieceColor pieceColor,
-  ) {
-    Board tempBoard = originalBoard.copyWithDeepPieces();
-    // debugPrint(" tempBoard == originalBoard $tempBoard");
-    tempBoard = tempBoard
-        .placePiece(move.start, null)
-        .placePiece(move.end, originalBoard.getPieceAt(move.start));
+  @override
+  GameResult getGameResult() {
+    return checkGameEndConditions();
+  }
 
-    // Update king's position in the simulated board if the king itself moved
-    if (pieceType == PieceType.king) {
-      tempBoard = tempBoard.copyWith(
-        kingPositions: Map.from(tempBoard.kingPositions)
-          ..update(pieceColor, (value) => move.end),
+  @override
+  void resetGame() {
+    _currentBoard = Board.initialAsWhitePlayer();
+    _boardHistory = [_currentBoard]; // إعادة تعيين تاريخ اللوحة أيضًا
+  }
+
+  @override
+  Board simulateMove(Board board, Move move) {
+    Board simulatedBoard = board.copyWithDeepPieces();
+    final Piece? pieceToMove = simulatedBoard.getPieceAt(move.start);
+
+    if (pieceToMove == null) {
+      // هذا لا ينبغي أن يحدث إذا كانت الحركة قانونية
+      return simulatedBoard;
+    }
+
+    // لاحظ: هنا لا نغير hasMoved لأنها محاكاة فقط.
+    // يتم تغييرها في makeMove الفعلية.
+    // إذا كنت بحاجة لتغييرها للمحاكاة (مثلاً لفحص الكاستلينج في محاكاة)، ستحتاج لإنشاء نسخة من القطعة.
+    final Piece updatedPieceForSimulation =
+        pieceToMove.copyWith(); // لا تغير hasMoved هنا
+    simulatedBoard = simulatedBoard.placePiece(
+      move.end,
+      updatedPieceForSimulation,
+    );
+    simulatedBoard = simulatedBoard.placePiece(move.start, null);
+
+    // تحديث موقع الملك في اللوحة المحاكاة
+    if (pieceToMove.type == PieceType.king) {
+      final Map<PieceColor, Cell> newKingPositions = Map.from(
+        simulatedBoard.kingPositions,
       );
+      newKingPositions[pieceToMove.color] = move.end;
+      simulatedBoard = simulatedBoard.copyWith(kingPositions: newKingPositions);
     }
 
-    // // Handle special move effects in simulation for correct check detection
-    // if (move.isEnPassant) {
-    //   // Remove the captured pawn for en passant
-    //   final capturedPawnCell = Cell(row: move.start.row, col: move.end.col);
-    //   tempBoard = tempBoard.placePiece(capturedPawnCell, null);
-    // } else
+    // معالجة En Passant في المحاكاة
+    if (move.isEnPassant) {
+      final int capturedPawnRow =
+          pieceToMove.color == PieceColor.white
+              ? move.end.row + 1
+              : move.end.row - 1;
+      final Cell capturedPawnCell = Cell(
+        row: capturedPawnRow,
+        col: move.end.col,
+      );
+      simulatedBoard = simulatedBoard.placePiece(capturedPawnCell, null);
+    }
 
-    // if (move.isCastling) {
-    //   // Move the rook as well in simulation
-    //   // Determine the rook's start and end columns based on castling side
-    //   // King-side castling: rook starts at col 7, ends at col 5
-    //   // Queen-side castling: rook starts at col 0, ends at col 3
-    //   // Note: This assumes the move.end.col is either 6 (king-side) or 2 (queen-side)
-    //   final rookStartCol = move.end.col == 6 ? 7 : 0;
-    //   final rookEndCol = move.end.col == 6 ? 5 : 3;
-    //   final rookPiece = tempBoard.getPieceAt(
-    //     Cell(row: move.start.row, col: rookStartCol),
-    //   );
-    //   if (rookPiece != null) {
-    //     tempBoard = tempBoard.placePiece(
-    //       Cell(row: move.start.row, col: rookStartCol),
-    //       null,
-    //     );
-    //     tempBoard = tempBoard.placePiece(
-    //       Cell(row: move.start.row, col: rookEndCol),
-    //       rookPiece,
-    //     );
-    //   }
-    // } else if (move.isPromotion && move.promotedPieceType != null) {
-    //   // Replace pawn with promoted piece in simulation
-    //   tempBoard = tempBoard.placePiece(
-    //     move.end,
-    //     Piece.create(color: pieceColor, type: move.promotedPieceType!),
-    //   );
-    // }
-    return tempBoard;
+    // معالجة Castling في المحاكاة
+    if (move.isCastling && pieceToMove.type == PieceType.king) {
+      final int kingRow = pieceToMove.color == PieceColor.white ? 7 : 0;
+      if (move.end.col == 6) {
+        // King-side castling
+        final Cell oldRookCell = Cell(row: kingRow, col: 7);
+        final Cell newRookCell = Cell(row: kingRow, col: 5);
+        final Rook? rook = simulatedBoard.getPieceAt(oldRookCell) as Rook?;
+        if (rook != null) {
+          final Rook updatedRook =
+              rook.copyWith(); // لا تغير hasMoved هنا للمحاكاة
+          simulatedBoard = simulatedBoard.placePiece(newRookCell, updatedRook);
+          simulatedBoard = simulatedBoard.placePiece(oldRookCell, null);
+        }
+      } else if (move.end.col == 2) {
+        // Queen-side castling
+        final Cell oldRookCell = Cell(row: kingRow, col: 0);
+        final Cell newRookCell = Cell(row: kingRow, col: 3);
+        final Rook? rook = simulatedBoard.getPieceAt(oldRookCell) as Rook?;
+        if (rook != null) {
+          final Rook updatedRook =
+              rook.copyWith(); // لا تغير hasMoved هنا للمحاكاة
+          simulatedBoard = simulatedBoard.placePiece(newRookCell, updatedRook);
+          simulatedBoard = simulatedBoard.placePiece(oldRookCell, null);
+        }
+      }
+    }
+
+    return simulatedBoard;
   }
 
-  /// Adds legal castling moves to the list if all conditions are met.
-  void _addLegalCastlingMoves(
-    Board board,
-    PieceColor color,
-    List<Move> legalMoves,
-  ) {
-    final kingRow = color == PieceColor.white ? 7 : 0;
-    final kingCell = Cell(row: kingRow, col: 4);
-    final king = board.getPieceAt(kingCell);
+  @override
+  bool isMoveResultingInCheck(Board board, Move move) {
+    final simulatedBoard = simulateMove(board, move);
+    // التحقق من أن الملك الخاص باللاعب الذي قام بالحركة ليس في كش بعد الحركة.
+    return simulatedBoard.isKingInCheck(board.currentPlayer);
+  }
 
-    if (king == null || king.hasMoved || aiEngine.isKingInCheck(board, color)) {
-      return; // King has moved, or is in check, or no king found
+  @override
+  List<Move> getAllLegalMovesForCurrentPlayer() {
+    final List<Move> allLegalMoves = [];
+    final currentPlayerColor = _currentBoard.currentPlayer;
+
+    for (int r = 0; r < 8; r++) {
+      for (int c = 0; c < 8; c++) {
+        final currentCell = Cell(row: r, col: c);
+        final piece = _currentBoard.getPieceAt(currentCell);
+        if (piece != null && piece.color == currentPlayerColor) {
+          allLegalMoves.addAll(getLegalMoves(currentCell));
+        }
+      }
     }
+    return allLegalMoves;
+  }
+
+  @override
+  bool hasAnyLegalMoves(PieceColor playerColor) {
+    // لحساب الحركات القانونية للاعب، نحتاج إلى التأكد من أن isKingInCheck
+    // والمنطق يعتمد على "اللاعب الحالي" في اللوحة.
+    // نقوم بتغيير currentPlayer مؤقتًا إذا لم يكن اللون المطلوب.
+    final originalCurrentPlayer = _currentBoard.currentPlayer;
+    _currentBoard = _currentBoard.copyWith(currentPlayer: playerColor);
+
+    final bool hasMoves = getAllLegalMovesForCurrentPlayer().isNotEmpty;
+
+    // استعادة اللاعب الحالي الأصلي
+    _currentBoard = _currentBoard.copyWith(
+      currentPlayer: originalCurrentPlayer,
+    );
+    return hasMoves;
+  }
+
+  @override
+  GameResult checkGameEndConditions() {
+    final currentPlayerColor = _currentBoard.currentPlayer;
+
+    // 1. تحقق من التعادل أولاً
+    final drawOutcome = checkForDrawConditions();
+    if (drawOutcome != null) {
+      if (drawOutcome == GameOutcome.stalemate) {
+        return GameResult.stalemate();
+      } else if (drawOutcome == GameOutcome.draw) {
+        return GameResult.draw(
+          DrawReason.insufficientMaterial,
+        ); // تحديد سبب التعادل هنا
+      }
+    }
+
+    // 2. تحقق من كش ملك / طريق مسدود
+    final bool kingInCheck = isKingInCheck(currentPlayerColor);
+    final bool hasNoLegalMoves = !hasAnyLegalMoves(currentPlayerColor);
+
+    if (kingInCheck && hasNoLegalMoves) {
+      // كش ملك
+      final PieceColor winner =
+          currentPlayerColor == PieceColor.white
+              ? PieceColor.black
+              : PieceColor.white;
+      return GameResult.checkmate(winner);
+    } else if (!kingInCheck && hasNoLegalMoves) {
+      // طريق مسدود
+      return GameResult.stalemate();
+    } else if (drawOutcome == GameOutcome.draw) {
+      // إذا كان هناك تعادل لأسباب أخرى غير الطريق المسدود (مثل الخمسين حركة أو التكرار الثلاثي)
+      // هذا الشرط ضروري لتغطية الحالات التي لا تكون فيها كش ملك أو طريق مسدود ولكنها تعادل.
+      return GameResult.draw(
+        DrawReason.insufficientMaterial,
+      ); // يجب أن يتم تحديده بدقة أكبر
+    }
+
+    return GameResult.playing(); // اللعبة ما زالت مستمرة
+  }
+
+  @override
+  GameOutcome? checkForDrawConditions() {
+    // 1. التعادل بالمواد غير الكافية
+    if (_isInsufficientMaterialDraw()) {
+      return GameOutcome.draw;
+    }
+
+    // 2. قاعدة الخمسين حركة
+    if (_currentBoard.halfMoveClock >= 100) {
+      // 100 نصف حركة = 50 حركة كاملة
+      return GameOutcome.draw;
+    }
+
+    // 3. التكرار الثلاثي
+    if (_isThreefoldRepetition()) {
+      return GameOutcome.draw;
+    }
+
+    // يمكنك إضافة التعادل بالاتفاق هنا، لكنه يتطلب مدخلات من المستخدم
+    return null; // لا يوجد تعادل حاليًا
+  }
+
+  /// يتحقق مما إذا كانت اللوحة الحالية قد تكررت ثلاث مرات.
+  bool _isThreefoldRepetition() {
+    if (_boardHistory.length < 5) {
+      return false; // تحتاج على الأقل 5 لوحات لتكرار ثلاثي (حركتان لكل لاعب + اللوحة الحالية)
+    }
+
+    final currentBoardFEN = _boardToFEN(_currentBoard);
+    int count = 0;
+    // ابحث في سجل اللوحات (تجاهل اللوحة الأخيرة التي تمت إضافتها للتو)
+    for (int i = 0; i < _boardHistory.length - 1; i++) {
+      if (_boardToFEN(_boardHistory[i]) == currentBoardFEN) {
+        count++;
+      }
+    }
+    return count >=
+        2; // إذا كانت اللوحة الحالية هي التكرار الثالث، يجب أن يكون قد ظهرت مرتين بالفعل في السجل
+  }
+
+  /// دالة مساعدة لتحويل حالة اللوحة إلى تمثيل FEN مبسط
+  /// يستخدم لمقارنة اللوحات لتحديد التكرار الثلاثي.
+  /// (ملاحظة: هذا ليس FEN كاملًا ودقيقًا وفقًا لمعايير الشطرنج، ولكنه كافٍ للمقارنة الداخلية)
+  String _boardToFEN(Board board) {
+    String fen = '';
+    for (int r = 0; r < 8; r++) {
+      int emptyCount = 0;
+      for (int c = 0; c < 8; c++) {
+        final piece = board.squares[r][c];
+        if (piece == null) {
+          emptyCount++;
+        } else {
+          if (emptyCount > 0) {
+            fen += '$emptyCount';
+            emptyCount = 0;
+          }
+          String pieceChar = '';
+          switch (piece.type) {
+            case PieceType.pawn:
+              pieceChar = 'p';
+              break;
+            case PieceType.rook:
+              pieceChar = 'r';
+              break;
+            case PieceType.knight:
+              pieceChar = 'n';
+              break;
+            case PieceType.bishop:
+              pieceChar = 'b';
+              break;
+            case PieceType.queen:
+              pieceChar = 'q';
+              break;
+            case PieceType.king:
+              pieceChar = 'k';
+              break;
+          }
+          fen +=
+              (piece.color == PieceColor.white
+                  ? pieceChar.toUpperCase()
+                  : pieceChar);
+        }
+      }
+      if (emptyCount > 0) {
+        fen += '$emptyCount';
+      }
+      if (r < 7) {
+        fen += '/';
+      }
+    }
+
+    // إضافة معلومات اللاعب الحالي وحقوق الكاستلينج وحركة الـ En Passant ونصف الحركة والرقم الكامل للحركة
+    fen += ' ${board.currentPlayer == PieceColor.white ? 'w' : 'b'}';
+
+    String castlingRightsStr = '';
+    if (board.castlingRights[PieceColor.white]![CastlingSide.kingSide]!) {
+      castlingRightsStr += 'K';
+    }
+    if (board.castlingRights[PieceColor.white]![CastlingSide.queenSide]!) {
+      castlingRightsStr += 'Q';
+    }
+    if (board.castlingRights[PieceColor.black]![CastlingSide.kingSide]!) {
+      castlingRightsStr += 'k';
+    }
+    if (board.castlingRights[PieceColor.black]![CastlingSide.queenSide]!) {
+      castlingRightsStr += 'q';
+    }
+    fen += ' ${castlingRightsStr.isEmpty ? '-' : castlingRightsStr}';
+
+    // تمثيل En Passant: يجب أن يكون بتنسيق العمود والصف (a3, e6)
+    // هنا نقوم بتمثيله كـ 'rowcol' مؤقتًا، يمكن تحسينه لاحقًا ليتوافق مع FEN القياسي.
+    fen +=
+        ' ${board.enPassantTarget == null ? '-' : String.fromCharCode(97 + board.enPassantTarget!.col) + (8 - board.enPassantTarget!.row).toString()}';
+    fen += ' ${board.halfMoveClock}';
+    fen += ' ${board.fullMoveNumber}';
+
+    return fen;
+  }
+
+  /// يتحقق مما إذا كانت حالة اللعبة هي تعادل بسبب المواد غير الكافية.
+  /// (الملك مقابل الملك، الملك والأسقف مقابل الملك، الملك والحصان مقابل الملك).
+  bool _isInsufficientMaterialDraw() {
+    List<Piece> allPieces = [];
+    for (var row in _currentBoard.squares) {
+      for (var piece in row) {
+        if (piece != null) {
+          allPieces.add(piece);
+        }
+      }
+    }
+
+    // الملك مقابل الملك
+    if (allPieces.length == 2 &&
+        allPieces.every((p) => p.type == PieceType.king)) {
+      return true;
+    }
+
+    // الملك والأسقف مقابل الملك
+    if (allPieces.length == 3 &&
+        allPieces.where((p) => p.type == PieceType.king).length == 2 &&
+        allPieces.any((p) => p.type == PieceType.bishop)) {
+      return true;
+    }
+
+    // الملك والحصان مقابل الملك
+    if (allPieces.length == 3 &&
+        allPieces.where((p) => p.type == PieceType.king).length == 2 &&
+        allPieces.any((p) => p.type == PieceType.knight)) {
+      return true;
+    }
+
+    // الملك والأسقف مقابل الملك والأسقف (على نفس لون المربعات)
+    // هذا الشرط أكثر تعقيدًا ويتطلب تحديد لون مربع الأسقف.
+    // لتبسيط، إذا كان هناك ملكان وأسقفان فقط، فهذا تعادل.
+    if (allPieces.length == 4 &&
+        allPieces.where((p) => p.type == PieceType.king).length == 2 &&
+        allPieces.where((p) => p.type == PieceType.bishop).length == 2) {
+      // للتحقق من أن الأساقفة على نفس لون المربعات، نحتاج إلى معرفة مواقعهم.
+      // هذا المثال لا يتتبع مواقع القطع في قائمة allPieces.
+      // سأفترض هنا أن وجود ملكين وأسقفين فقط يؤدي إلى التعادل بشكل عام.
+      return true;
+    }
+
+    // يمكن إضافة المزيد من حالات المواد غير الكافية هنا (مثل ملكين وحصانين).
+
+    return false;
+  }
+
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+
+  /// قاموس يمثل قيم القطع (لتقييم اللوحة).
+  static const Map<PieceType, int> _pieceValues = {
+    PieceType.pawn: 100,
+    PieceType.knight: 320,
+    PieceType.bishop: 330,
+    PieceType.rook: 500,
+    PieceType.queen: 900,
+    PieceType.king: 20000, // قيمة عالية جدا للملك
+  };
+
+  /// العمق الأقصى لـ Minimax.
+  /// (يمكن زيادته للحصول على AI أقوى، ولكنه يزيد من وقت المعالجة).
+  static const int _maxMinimaxDepth =
+      3; // مثال: 3 حركات للأمام (1 للـ AI, 1 للخصم, 1 للـ AI)
+
+  @override
+  Future<Move?> getAiMove(Board board, PieceColor aiPlayerColor) async {
+    // إذا لم تكن هناك حركات قانونية، لا يوجد تحرك للذكاء الاصطناعي.
+    if (!hasAnyLegalMoves(aiPlayerColor)) {
+      return null;
+    }
+
+    // تشغيل خوارزمية Minimax
+    final result = await _minimax(
+      board: board.copyWith(
+        currentPlayer: aiPlayerColor,
+      ), // تأكد أن اللاعب الحالي هو AI
+      depth: _maxMinimaxDepth,
+      maximizingPlayer: true, // الذكاء الاصطناعي يحاول تعظيم نتيجته
+      aiPlayerColor: aiPlayerColor,
+    );
+
+    return result.move; // إرجاع أفضل حركة وجدتها Minimax
+  }
+
+  /// دالة تقييم اللوحة.
+  /// تُرجع قيمة عددية تمثل مدى جودة اللوحة للاعب المحدد.
+  int _evaluateBoard(Board board, PieceColor aiPlayerColor) {
+    int score = 0;
+    for (int r = 0; r < 8; r++) {
+      for (int c = 0; c < 8; c++) {
+        final piece = board.squares[r][c];
+        if (piece != null) {
+          final pieceValue = _pieceValues[piece.type] ?? 0;
+          if (piece.color == aiPlayerColor) {
+            score += pieceValue;
+          } else {
+            score -= pieceValue;
+          }
+        }
+      }
+    }
+    return score;
+  }
+
+  /// تنفيذ خوارزمية Minimax.
+  /// [board]: اللوحة الحالية.
+  /// [depth]: العمق المتبقي للبحث.
+  /// [maximizingPlayer]: صحيح إذا كان اللاعب الحالي هو لاعب التعظيم (AI).
+  /// [aiPlayerColor]: لون قطع الذكاء الاصطناعي.
+  Future<({int score, Move? move})> _minimax({
+    required Board board,
+    required int depth,
+    required bool maximizingPlayer,
+    required PieceColor aiPlayerColor,
+  }) async {
+    // 1. حالة القاعدة (Base Case):
+    // إذا وصلنا إلى أقصى عمق للبحث أو كانت اللعبة قد انتهت.
+    //TODO
+    // if (depth == 0 || board.getGameResult().outcome != GameOutcome.playing) {
+    if (depth == 0 || getGameResult().outcome != GameOutcome.playing) {
+      return (score: _evaluateBoard(board, aiPlayerColor), move: null);
+    }
+
+    final currentPlayerColor = board.currentPlayer;
+
+    // 2. توليد جميع الحركات القانونية للاعب الحالي
+    // ملاحظة: نحتاج إلى قائمة بالحركات القانونية للوحة الحالية،
+    // وليس اللوحة العالمية _currentBoard.
+    final List<Move> legalMovesForBoard = _getAllLegalMovesForBoard(
+      board,
+      currentPlayerColor,
+    );
+
+    if (maximizingPlayer) {
+      // لاعب التعظيم (AI): يحاول زيادة النتيجة إلى أقصى حد
+      int maxEval = -double.maxFinite.toInt();
+      Move? bestMove;
+
+      for (final move in legalMovesForBoard) {
+        final simulatedBoard = simulateMove(board, move);
+        final evalResult = await _minimax(
+          board: simulatedBoard.copyWith(
+            currentPlayer:
+                currentPlayerColor == PieceColor.white
+                    ? PieceColor.black
+                    : PieceColor.white,
+          ),
+          depth: depth - 1,
+          maximizingPlayer: false, // الآن دور لاعب التقليل
+          aiPlayerColor: aiPlayerColor,
+        );
+
+        if (evalResult.score > maxEval) {
+          maxEval = evalResult.score;
+          bestMove = move;
+        }
+      }
+      return (score: maxEval, move: bestMove);
+    } else {
+      // لاعب التقليل (الخصم): يحاول تقليل النتيجة إلى أقصى حد
+      int minEval = double.maxFinite.toInt();
+      Move? bestMove; // لن نحتاج لـ bestMove هنا إذا كنا مهتمين فقط بحركة AI
+
+      for (final move in legalMovesForBoard) {
+        final simulatedBoard = simulateMove(board, move);
+        final evalResult = await _minimax(
+          board: simulatedBoard.copyWith(
+            currentPlayer:
+                currentPlayerColor == PieceColor.white
+                    ? PieceColor.black
+                    : PieceColor.white,
+          ),
+          depth: depth - 1,
+          maximizingPlayer: true, // الآن دور لاعب التعظيم (AI)
+          aiPlayerColor: aiPlayerColor,
+        );
+
+        if (evalResult.score < minEval) {
+          minEval = evalResult.score;
+          bestMove = move; // نحدثها هنا أيضًا لضمان اختيار حركة ما
+        }
+      }
+      return (score: minEval, move: bestMove);
+    }
+  }
+
+  /// دالة مساعدة للحصول على جميع الحركات القانونية للوحة معينة ولون لاعب معين.
+  /// هذه نسخة من `getAllLegalMovesForCurrentPlayer` ولكنها تعمل على لوحة مُعطاة.
+  List<Move> _getAllLegalMovesForBoard(Board board, PieceColor playerColor) {
+    final List<Move> allLegalMoves = [];
+
+    for (int r = 0; r < 8; r++) {
+      for (int c = 0; c < 8; c++) {
+        final currentCell = Cell(row: r, col: c);
+        final piece = board.getPieceAt(currentCell);
+        if (piece != null && piece.color == playerColor) {
+          // نحتاج إلى الحصول على الحركات الأولية وتصفيتها بناءً على اللوحة المُعطاة
+          final rawMoves = piece.getRawMoves(board, currentCell);
+          final legalMovesForPiece =
+              rawMoves.where((move) {
+                return !isMoveResultingInCheck(board, move);
+              }).toList();
+
+          // إضافة حركات الكاستلينج القانونية
+          if (piece.type == PieceType.king) {
+            _addCastlingMovesForBoard(
+              legalMovesForPiece,
+              currentCell,
+              piece.color,
+              board,
+            );
+          }
+          // إضافة حركات En Passant القانونية
+          if (piece.type == PieceType.pawn) {
+            _addEnPassantMovesForBoard(
+              legalMovesForPiece,
+              currentCell,
+              piece.color,
+              board,
+            );
+          }
+          allLegalMoves.addAll(legalMovesForPiece);
+        }
+      }
+    }
+    return allLegalMoves;
+  }
+
+  /// نسخة من _addCastlingMoves تعمل على لوحة محددة (للمحاكاة).
+  void _addCastlingMovesForBoard(
+    List<Move> moves,
+    Cell kingCell,
+    PieceColor kingColor,
+    Board boardToSimulate,
+  ) {
+    if (boardToSimulate.isKingInCheck(kingColor)) return;
+
+    final int kingRow = kingColor == PieceColor.white ? 7 : 0;
 
     // King-side castling
-    if (board.castlingRights[color]![CastlingSide.kingSide]!) {
-      final rookCell = Cell(row: kingRow, col: 7);
-      final path1 = Cell(row: kingRow, col: 5);
-      final path2 = Cell(row: kingRow, col: 6);
+    if (boardToSimulate.castlingRights[kingColor]![CastlingSide.kingSide]!) {
+      final Cell rookCell = Cell(row: kingRow, col: 7);
+      final Piece? rook = boardToSimulate.getPieceAt(rookCell);
 
-      final rook = board.getPieceAt(rookCell);
-
-      if (rook?.type == PieceType.rook &&
-          !rook!.hasMoved &&
-          board.getPieceAt(path1) == null &&
-          board.getPieceAt(path2) == null &&
-          !aiEngine.isKingInCheck(
-            _simulateMove(
-              board,
-              Move(start: kingCell, end: path1),
-              PieceType.king,
-              color,
+      if (rook is Rook &&
+          !rook.hasMoved &&
+          boardToSimulate.getPieceAt(Cell(row: kingRow, col: 5)) == null &&
+          boardToSimulate.getPieceAt(Cell(row: kingRow, col: 6)) == null) {
+        if (!boardToSimulate.isCellUnderAttack(
+              kingColor,
+              Cell(row: kingRow, col: 5),
+            ) &&
+            !boardToSimulate.isCellUnderAttack(
+              kingColor,
+              Cell(row: kingRow, col: 6),
+            )) {
+          moves.add(
+            Move(
+              start: kingCell,
+              end: Cell(row: kingRow, col: 6),
+              isCastling: true,
             ),
-            color,
-          ) &&
-          !aiEngine.isKingInCheck(
-            _simulateMove(
-              board,
-              Move(start: kingCell, end: path2),
-              PieceType.king,
-              color,
-            ),
-            color,
-          )) {
-        legalMoves.add(Move(start: kingCell, end: path2, isCastling: true));
+          );
+        }
       }
     }
 
     // Queen-side castling
-    if (board.castlingRights[color]![CastlingSide.queenSide]!) {
-      final rookCell = Cell(row: kingRow, col: 0);
-      final path1 = Cell(row: kingRow, col: 3);
-      final path2 = Cell(row: kingRow, col: 2);
-      final path3 = Cell(row: kingRow, col: 1); // Cell b1/b8 must also be empty
+    if (boardToSimulate.castlingRights[kingColor]![CastlingSide.queenSide]!) {
+      final Cell rookCell = Cell(row: kingRow, col: 0);
+      final Piece? rook = boardToSimulate.getPieceAt(rookCell);
 
-      final rook = board.getPieceAt(rookCell);
-
-      if (rook?.type == PieceType.rook &&
-          !rook!.hasMoved &&
-          board.getPieceAt(path1) == null &&
-          board.getPieceAt(path2) == null &&
-          board.getPieceAt(path3) == null &&
-          !aiEngine.isKingInCheck(
-            _simulateMove(
-              board,
-              Move(start: kingCell, end: path1),
-              PieceType.king,
-              color,
+      if (rook is Rook &&
+          !rook.hasMoved &&
+          boardToSimulate.getPieceAt(Cell(row: kingRow, col: 3)) == null &&
+          boardToSimulate.getPieceAt(Cell(row: kingRow, col: 2)) == null &&
+          boardToSimulate.getPieceAt(Cell(row: kingRow, col: 1)) == null) {
+        if (!boardToSimulate.isCellUnderAttack(
+              kingColor,
+              Cell(row: kingRow, col: 3),
+            ) &&
+            !boardToSimulate.isCellUnderAttack(
+              kingColor,
+              Cell(row: kingRow, col: 2),
+            )) {
+          moves.add(
+            Move(
+              start: kingCell,
+              end: Cell(row: kingRow, col: 2),
+              isCastling: true,
             ),
-            color,
-          ) &&
-          !aiEngine.isKingInCheck(
-            _simulateMove(
-              board,
-              Move(start: kingCell, end: path2),
-              PieceType.king,
-              color,
-            ),
-            color,
-          )) {
-        legalMoves.add(Move(start: kingCell, end: path2, isCastling: true));
+          );
+        }
       }
     }
   }
 
-  /// Validates if an en passant move is truly legal based on the last move.
-  bool _isValidEnPassant(Board board, Move enPassantMove) {
-    // Check if the move is actually an en passant move
-    // and if the board has a move history to check against.
-    if (!enPassantMove.isEnPassant || board.moveHistory.isEmpty) return false;
-
-    final lastMove = board.moveHistory.last;
-    final capturedPawnCell = Cell(
-      row: enPassantMove.start.row,
-      col: enPassantMove.end.col,
-    ); // The cell where the captured pawn should be
-
-    // Check if the last move was a two-step pawn move by the opponent
-    // and if that pawn is now on the capturedPawnCell.
-    final movedPiece = board.getPieceAt(
-      capturedPawnCell,
-    ); // The pawn that would be captured
-    if (movedPiece == null || movedPiece.type != PieceType.pawn) {
-      // if (movedPiece == null || movedPiece.type != PieceType.pawn || movedPiece.color == enPassantMove.start.color) {
-      return false; // No pawn to capture, or it's your own pawn
-    }
-
-    // The pawn to capture must have just moved two squares from its starting rank
-    final expectedStartRow =
-        movedPiece.color == PieceColor.white
-            ? 6
-            : 1; // White pawn from row 6, Black from row 1
-    final expectedEndRow =
-        movedPiece.color == PieceColor.white
-            ? 4
-            : 3; // White pawn to row 4, Black to row 3
-
-    return lastMove.isTwoStepPawnMove &&
-        lastMove.start ==
-            Cell(row: expectedStartRow, col: capturedPawnCell.col) &&
-        lastMove.end == Cell(row: expectedEndRow, col: capturedPawnCell.col) &&
-        enPassantMove.end ==
-            board
-                .enPassantTarget; // Ensure it targets the globally tracked en passant target
-  }
-
-  /// Updates castling rights based on the executed move.
-  Map<PieceColor, Map<CastlingSide, bool>> _updateCastlingRights(
-    Map<PieceColor, Map<CastlingSide, bool>> currentRights,
-    Move move,
-    PieceColor pieceColor,
+  /// نسخة من _addEnPassantMoves تعمل على لوحة محددة (للمحاكاة).
+  void _addEnPassantMovesForBoard(
+    List<Move> moves,
+    Cell pawnCell,
+    PieceColor pawnColor,
+    Board boardToSimulate,
   ) {
-    final newRights = Map<PieceColor, Map<CastlingSide, bool>>.from(
-      currentRights,
-    )..update(pieceColor, (value) => Map.from(value));
+    if (boardToSimulate.enPassantTarget == null) return;
 
-    // If King moves, lose all castling rights for that color
-    if (pieceColor == PieceColor.white) {
-      if (move.start == const Cell(row: 7, col: 4)) {
-        newRights[PieceColor.white]![CastlingSide.kingSide] = false;
-        newRights[PieceColor.white]![CastlingSide.queenSide] = false;
-      }
-    } else {
-      // Black King
-      // If Black King moves, lose all castling rights for that color
-      if (move.start == const Cell(row: 0, col: 4)) {
-        newRights[PieceColor.black]![CastlingSide.kingSide] = false;
-        newRights[PieceColor.black]![CastlingSide.queenSide] = false;
-      }
-    }
+    final int direction = pawnColor == PieceColor.white ? -1 : 1;
+    final int targetRow = pawnCell.row + direction;
 
-    // If Rook moves from its original square or is captured, lose that side's castling right for that color
-    if (move.start == const Cell(row: 7, col: 7) ||
-        move.end == const Cell(row: 7, col: 7)) {
-      newRights[PieceColor.white]![CastlingSide.kingSide] = false;
-    }
-    if (move.start == const Cell(row: 7, col: 0) ||
-        move.end == const Cell(row: 7, col: 0)) {
-      newRights[PieceColor.white]![CastlingSide.queenSide] = false;
-    }
-    if (move.start == const Cell(row: 0, col: 7) ||
-        move.end == const Cell(row: 0, col: 7)) {
-      newRights[PieceColor.black]![CastlingSide.kingSide] = false;
-    }
-    if (move.start == const Cell(row: 0, col: 0) ||
-        move.end == const Cell(row: 0, col: 0)) {
-      newRights[PieceColor.black]![CastlingSide.queenSide] = false;
-    }
+    final List<Cell> adjacentCells = [
+      Cell(row: pawnCell.row, col: pawnCell.col - 1),
+      Cell(row: pawnCell.row, col: pawnCell.col + 1),
+    ];
 
-    return newRights;
-  }
-
-  /// Checks the overall game status (check, checkmate, stalemate, draw).
-  Future<GameResult> _checkGameStatus(Board board) async {
-    final currentPlayerColor = board.currentPlayer;
-    final opponentPlayerColor =
-        currentPlayerColor == PieceColor.white
-            ? PieceColor.black
-            : PieceColor.white;
-
-    // Determine if current player has any legal moves
-    bool hasLegalMoves = false;
-    for (int r = 0; r < 8; r++) {
-      for (int c = 0; c < 8; c++) {
-        final cell = Cell(row: r, col: c);
-        final piece = board.getPieceAt(cell);
-        if (piece != null && piece.color == currentPlayerColor) {
-          final result = await getLegalMovesForPiece(board, cell);
-          if (result.isRight() && result.getOrElse(() => []).isNotEmpty) {
-            hasLegalMoves = true;
-            break;
+    for (final adjacentCell in adjacentCells) {
+      if (adjacentCell.isValid()) {
+        final Piece? adjacentPiece = boardToSimulate.getPieceAt(adjacentCell);
+        if (adjacentPiece is Pawn &&
+            adjacentPiece.color != pawnColor &&
+            boardToSimulate.enPassantTarget ==
+                Cell(row: targetRow, col: adjacentCell.col) &&
+            boardToSimulate.moveHistory.isNotEmpty) {
+          final lastMove = boardToSimulate.moveHistory.last;
+          if (lastMove.isTwoStepPawnMove && lastMove.end == adjacentCell) {
+            moves.add(
+              Move(
+                start: pawnCell,
+                end: boardToSimulate.enPassantTarget!,
+                isEnPassant: true,
+                isCapture: true,
+              ),
+            );
           }
         }
       }
-      if (hasLegalMoves) break;
+    }
+  }
+
+  /// نسخة من checkGameEndConditions تعمل على لوحة محددة (للمحاكاة).
+  GameResult _checkGameEndConditionsForBoard(Board boardToSimulate) {
+    final currentPlayerColor = boardToSimulate.currentPlayer;
+
+    final drawOutcome = _checkForDrawConditionsForBoard(boardToSimulate);
+    if (drawOutcome != null) {
+      if (drawOutcome == GameOutcome.draw) {
+        return GameResult.draw(
+          DrawReason.insufficientMaterial,
+        ); // يجب تحديد السبب بدقة
+      }
     }
 
-    final isKingInCheck = aiEngine.isKingInCheck(board, currentPlayerColor);
+    final bool kingInCheck = boardToSimulate.isKingInCheck(currentPlayerColor);
+    final bool hasNoLegalMoves =
+        !_hasAnyLegalMovesForBoard(boardToSimulate, currentPlayerColor);
 
-    if (isKingInCheck) {
-      if (!hasLegalMoves) {
-        return GameResult.checkmate(
-          opponentPlayerColor,
-        ); // The player whose turn it is is checkmated
-      }
-    } else {
-      if (!hasLegalMoves) {
-        return GameResult.stalemate();
-      }
-    }
-
-    // Check for other draw conditions
-    if (aiEngine.isDrawByInsufficientMaterial(board)) {
+    if (kingInCheck && hasNoLegalMoves) {
+      final PieceColor winner =
+          currentPlayerColor == PieceColor.white
+              ? PieceColor.black
+              : PieceColor.white;
+      return GameResult.checkmate(winner);
+    } else if (!kingInCheck && hasNoLegalMoves) {
+      return GameResult.stalemate();
+    } else if (drawOutcome == GameOutcome.draw) {
       return GameResult.draw(DrawReason.insufficientMaterial);
     }
-    if (board.halfMoveClock >= 100) {
-      // 50 full moves = 100 half moves
-      return GameResult.draw(DrawReason.fiftyMoveRule);
-    }
-    // For threefold repetition, you'd need to store FEN strings or board hashes in history
-    // and check for repetition here.
-    // if (aiEngine.isDrawByThreefoldRepetition(board.moveHistory)) {
-    //   return GameResult.draw(DrawReason.threefoldRepetition);
-    // }
 
     return GameResult.playing();
   }
 
-  @override
-  Future<Either<Failure, Move>> getBestAIMove(Board board, int depth) async {
-    // try {
-    final bestMove = await aiEngine.findBestMove(board, depth);
-    if (bestMove != null) {
-      return Right(bestMove);
-    } else {
-      return Left(GameFailure(message: 'AI could not find a move.'));
+  /// نسخة من checkForDrawConditions تعمل على لوحة محددة (للمحاكاة).
+  GameOutcome? _checkForDrawConditionsForBoard(Board boardToSimulate) {
+    if (_isInsufficientMaterialDrawForBoard(boardToSimulate)) {
+      return GameOutcome.draw;
     }
-    // } catch (e) {
-    //   return Left(GameFailure(message: 'AI error: $e'));
-    // }
-  }
-
-  @override
-  Future<Either<Failure, Board>> loadGame() async {
-    // try {
-    final savedBoardJson = await localStorageService.loadGame();
-    if (savedBoardJson == null) {
-      return Left(CacheFailure(message: 'No saved game found.'));
+    if (boardToSimulate.halfMoveClock >= 100) {
+      return GameOutcome.draw;
     }
-    // Implement deserialization from JSON to Board object
-    final loadedBoard = _deserializeBoard(savedBoardJson);
-    return Right(loadedBoard);
-    // } catch (e) {
-    //   return Left(CacheFailure(message: 'Failed to load game: $e'));
-    // }
-  }
-
-  @override
-  Future<Either<Failure, Unit>> saveGame(Board board) async {
-    // try {
-    // Implement serialization from Board object to JSON
-    final boardJson = _serializeBoard(board);
-    await localStorageService.saveGame(boardJson);
-    return const Right(unit);
-    // } catch (e) {
-    //   return Left(CacheFailure(message: 'Failed to save game: $e'));
-    // }
-  }
-
-  // Helper for serialization (Board to JSON)
-  Map<String, dynamic> _serializeBoard(Board board) {
-    return {
-      'squares':
-          board.squares
-              .map((row) => row.map((piece) => piece?.toJson()).toList())
-              .toList(),
-      'currentPlayer': board.currentPlayer.name,
-      'moveHistory':
-          board.moveHistory
-              .map((m) => m.toJson())
-              .toList(), // Assuming Move has toJson
-      'kingPositions': board.kingPositions.map(
-        (k, v) => MapEntry(k.name, {'row': v.row, 'col': v.col}),
-      ),
-      'castlingRights': board.castlingRights.map(
-        (k, v) => MapEntry(k.name, v.map((k2, v2) => MapEntry(k2.name, v2))),
-      ),
-      'enPassantTarget':
-          board.enPassantTarget != null
-              ? {
-                'row': board.enPassantTarget!.row,
-                'col': board.enPassantTarget!.col,
-              }
-              : null,
-      'halfMoveClock': board.halfMoveClock,
-      'fullMoveNumber': board.fullMoveNumber,
-    };
-  }
-
-  // Helper for deserialization (JSON to Board)
-  Board _deserializeBoard(Map<String, dynamic> json) {
-    final List<List<Piece?>> squares =
-        (json['squares'] as List<dynamic>)
-            .map(
-              (row) =>
-                  (row as List<dynamic>)
-                      .map<Piece?>(
-                        (pJson) =>
-                            pJson != null
-                                ? Piece.fromJson(pJson as Map<String, dynamic>)
-                                : null,
-                      )
-                      .toList(),
-            )
-            .toList();
-
-    final currentPlayer =
-        (json['currentPlayer'] as String) == 'white'
-            ? PieceColor.white
-            : PieceColor.black;
-    final moveHistory =
-        (json['moveHistory'] as List<dynamic>)
-            .map((mJson) => Move.fromJson(mJson as Map<String, dynamic>))
-            .toList(); // Assuming Move has fromJson
-
-    final kingPositions = (json['kingPositions'] as Map<String, dynamic>).map(
-      (k, v) => MapEntry(
-        k == 'white' ? PieceColor.white : PieceColor.black,
-        Cell(
-          row: (v as Map<String, dynamic>)['row'] as int,
-          col: v['col'] as int,
-        ),
-      ),
-    );
-
-    final castlingRights = (json['castlingRights'] as Map<String, dynamic>).map(
-      (k, v) => MapEntry(
-        k == 'white' ? PieceColor.white : PieceColor.black,
-        (v as Map<String, dynamic>).map(
-          (k2, v2) => MapEntry(
-            k2 == 'kingSide' ? CastlingSide.kingSide : CastlingSide.queenSide,
-            v2 as bool,
-          ),
-        ),
-      ),
-    );
-
-    final enPassantTargetJson =
-        json['enPassantTarget'] as Map<String, dynamic>?;
-    final enPassantTarget =
-        enPassantTargetJson != null
-            ? Cell(
-              row: enPassantTargetJson['row'] as int,
-              col: enPassantTargetJson['col'] as int,
-            )
-            : null;
-
-    final halfMoveClock = json['halfMoveClock'] as int;
-    final fullMoveNumber = json['fullMoveNumber'] as int;
-
-    return Board(
-      squares: squares,
-      currentPlayer: currentPlayer,
-      moveHistory: moveHistory,
-      kingPositions: kingPositions,
-      castlingRights: castlingRights,
-      enPassantTarget: enPassantTarget,
-      halfMoveClock: halfMoveClock,
-      fullMoveNumber: fullMoveNumber,
-    );
-  }
-}
-
-extension ListExtensions<T> on List<T> {
-  T? firstWhereOrNull(bool Function(T element) test) {
-    for (var element in this) {
-      if (test(element)) {
-        return element;
-      }
-    }
+    // لا نتحقق من التكرار الثلاثي في Minimax لأنه مكلف جدًا ويحتاج إلى تاريخ اللوحة
+    // بأكمله والذي قد لا يكون متاحًا في سياق المحاكاة الفردية.
     return null;
   }
-}// 672 lines 
+
+  /// نسخة من _isInsufficientMaterialDraw تعمل على لوحة محددة (للمحاكاة).
+  bool _isInsufficientMaterialDrawForBoard(Board boardToSimulate) {
+    List<Piece> allPieces = [];
+    for (var row in boardToSimulate.squares) {
+      for (var piece in row) {
+        if (piece != null) {
+          allPieces.add(piece);
+        }
+      }
+    }
+
+    if (allPieces.length == 2 &&
+        allPieces.every((p) => p.type == PieceType.king)) {
+      return true;
+    }
+
+    if (allPieces.length == 3 &&
+        allPieces.where((p) => p.type == PieceType.king).length == 2 &&
+        allPieces.any((p) => p.type == PieceType.bishop)) {
+      return true;
+    }
+
+    if (allPieces.length == 3 &&
+        allPieces.where((p) => p.type == PieceType.king).length == 2 &&
+        allPieces.any((p) => p.type == PieceType.knight)) {
+      return true;
+    }
+
+    if (allPieces.length == 4 &&
+        allPieces.where((p) => p.type == PieceType.king).length == 2 &&
+        allPieces.where((p) => p.type == PieceType.bishop).length == 2) {
+      return true;
+    }
+    return false;
+  }
+
+  /// نسخة من hasAnyLegalMoves تعمل على لوحة محددة (للمحاكاة).
+  bool _hasAnyLegalMovesForBoard(
+    Board boardToSimulate,
+    PieceColor playerColor,
+  ) {
+    return _getAllLegalMovesForBoard(boardToSimulate, playerColor).isNotEmpty;
+  }
+}

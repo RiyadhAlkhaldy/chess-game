@@ -46,31 +46,11 @@ class GameComputerScreen extends StatelessWidget {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: GameBoardTitle(controller: controller),
-          centerTitle: true,
           actions: [
             IconButton(
               icon: const Icon(Icons.refresh),
-              tooltip: 'New Game',
-              onPressed: () {
-                controller.newGame();
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.save),
-              tooltip: 'Save Game',
-              onPressed: () {
-                controller.saveGame();
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.light_mode),
-              tooltip: 'Toggle Theme',
-              onPressed: () {
-                Get.changeThemeMode(
-                  Get.isDarkMode ? ThemeMode.light : ThemeMode.dark,
-                );
-              },
+              onPressed: () => controller.resetGame(),
+              tooltip: 'إعادة تعيين اللعبة',
             ),
           ],
         ),
@@ -79,34 +59,52 @@ class GameComputerScreen extends StatelessWidget {
         ///
         ///
         ///
-        ///
-        ///
         body: SafeArea(
           child: Column(
             children: [
-              // Display error messages
-              Obx(
-                () =>
-                    controller.errorMessage.isNotEmpty
-                        ? Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Text(
-                            controller.errorMessage.value,
-                            style: const TextStyle(
-                              color: Colors.red,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        )
-                        : const SizedBox.shrink(),
-              ),
-              // Loading indicator
-              Obx(
-                () =>
-                    controller.isLoading.value
-                        ? const LinearProgressIndicator()
-                        : const SizedBox.shrink(),
+              // عرض حالة اللعبة
+              GetX<GameController>(
+                builder: (controller) {
+                  String statusText = '';
+                  Color statusColor = Colors.black;
+
+                  switch (controller.gameResult.value.outcome) {
+                    case GameOutcome.playing:
+                      statusText =
+                          'الدور للّاعب: ${controller.board.value.currentPlayer == PieceColor.white ? 'الأبيض' : 'الأسود'}';
+                      if (controller.isCurrentKingInCheck()) {
+                        statusText += ' (كش!)';
+                        statusColor = Colors.red;
+                      }
+                      break;
+                    case GameOutcome.checkmate:
+                      statusText =
+                          'كش ملك! الفائز: ${controller.gameResult.value.winner == PieceColor.white ? 'الأبيض' : 'الأسود'}';
+                      statusColor = Colors.green;
+                      break;
+                    case GameOutcome.stalemate:
+                      statusText = 'طريق مسدود! (تعادل)';
+                      statusColor = Colors.orange;
+                      break;
+                    case GameOutcome.draw:
+                      statusText =
+                          'تعادل! السبب: ${controller.gameResult.value.drawReason == DrawReason.fiftyMoveRule ? 'قاعدة الخمسين حركة' : 'مواد غير كافية'}';
+                      statusColor = Colors.blue;
+                      break;
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(
+                      statusText,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: statusColor,
+                      ),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 10),
               // Chess Board centered
@@ -186,43 +184,5 @@ class UndoRedoWidgets extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class GameBoardTitle extends StatelessWidget {
-  const GameBoardTitle({super.key, required this.controller});
-
-  final GameController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return Obx(() {
-      // Display current player and game status in the app bar
-      String status = '';
-      final gameOutcome = controller.gameResult.value.outcome;
-      final currentPlayer = controller.board.value.currentPlayer;
-
-      if (gameOutcome == GameOutcome.playing) {
-        status =
-            '${currentPlayer == PieceColor.white ? 'White' : 'Black'}'
-            ' to move';
-        if (controller.aiEngine.isKingInCheck(
-          controller.board.value,
-          currentPlayer,
-        )) {
-          status += ' (Check!)'; // Indicate check
-        }
-      } else if (gameOutcome == GameOutcome.checkmate) {
-        status =
-            'Checkmate! ${controller.gameResult.value.winner == PieceColor.white ? 'White' : 'Black'} wins.';
-      } else if (gameOutcome == GameOutcome.stalemate) {
-        status = 'Stalemate! It\'s a Draw.';
-      } else if (gameOutcome == GameOutcome.draw) {
-        status =
-            'Draw! (${controller.gameResult.value.drawReason?.name ?? 'Unknown'})';
-      }
-
-      return Text(status, style: Theme.of(context).textTheme.titleSmall);
-    });
   }
 }

@@ -95,7 +95,7 @@ class GameBoardWidget extends StatelessWidget {
                             : 3.14159, // Rotate the board for black player
                     child: GestureDetector(
                       onTap: () {
-                        controller.selectCell(cell);
+                        controller.onCellTap(cell);
                       }, // Handle tap events for piece selection/movement
                       child: CellWidget(
                         cell: cell,

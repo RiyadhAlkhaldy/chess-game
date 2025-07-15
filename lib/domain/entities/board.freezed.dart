@@ -21,6 +21,8 @@ mixin _$Board {
  PieceColor get currentPlayer;// Current player to move
  Map<PieceColor, Cell> get kingPositions;// Tracks the current position of each king
  Map<PieceColor, Map<CastlingSide, bool>> get castlingRights;// Tracks castling rights for each player
+// Map<PieceColor, Map<CastlingSide, bool>>
+// castlingLefts, // Tracks castling rights for each player
  Cell? get enPassantTarget;// The cell where an en passant capture is possible
  int get halfMoveClock;// Number of half-moves since the last capture or pawn advance (for fifty-move rule)
  int get fullMoveNumber;
@@ -146,6 +148,8 @@ class _Board implements Board {
 }
 
 // Tracks castling rights for each player
+// Map<PieceColor, Map<CastlingSide, bool>>
+// castlingLefts, // Tracks castling rights for each player
 @override final  Cell? enPassantTarget;
 // The cell where an en passant capture is possible
 @override@JsonKey() final  int halfMoveClock;

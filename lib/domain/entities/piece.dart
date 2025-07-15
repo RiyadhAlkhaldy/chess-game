@@ -1,5 +1,4 @@
 //  lib/domain/entities/piece.dart
-import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'board.dart'; // For board context
@@ -44,7 +43,6 @@ abstract class Piece with _$Piece {
     required PieceType type,
     bool hasMoved = true, // Default to true for hasMoved
   }) {
-    debugPrint("in Piece.create type $type color $color hasMoved $hasMoved");
     switch (type) {
       case PieceType.pawn:
         return Pawn(color: color, hasMoved: hasMoved, type: type);
@@ -72,12 +70,12 @@ abstract class Piece with _$Piece {
 
 extension ONPiece on Piece {
   /// Creates a deep copy of the piece. Used for board simulation.
-  // Piece copy() => Piece(color: color, type: type);
+  Piece copy() => Piece(color: color, type: type);
 
   /// Abstract method to get all possible raw moves for the piece, without considering
   /// whether the move puts the king in check.
   List<Move> getRawMoves(Board board, Cell currentCell) {
-    debugPrint("in Piece getRawMoves type $type color $color");
+    // debugPrint("in Piece getRawMoves type $type color $color");
     switch (type) {
       case PieceType.pawn:
         return (this as Pawn).getRawMoves(board, currentCell);
