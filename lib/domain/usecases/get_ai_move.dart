@@ -16,7 +16,11 @@ class GetAiMove {
   /// [board] هي اللوحة الحالية.
   /// [aiPlayerColor] هو لون القطع التي يلعب بها الذكاء الاصطناعي.
   /// تعيد [Move] المقترحة من الذكاء الاصطناعي، أو null إذا لم تكن هناك حركات ممكنة.
-  Future<Move?> execute(Board board, PieceColor aiPlayerColor) async {
-    return await repository.getAiMove(board, aiPlayerColor);
+  Future<Move?> execute(
+    Board board,
+    PieceColor aiPlayerColor,
+    int aiDepth,
+  ) async {
+    return await repository.getAiMove(board, aiPlayerColor, aiDepth);
   }
 }

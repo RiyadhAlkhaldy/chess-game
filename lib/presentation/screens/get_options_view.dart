@@ -5,7 +5,7 @@ import '../controllers/get_options_controller.dart';
 import '../widgets/color_selector.dart';
 
 class GameOptionsView extends StatelessWidget {
-  final controller = Get.put(GameOptionsController());
+  final controller = Get.find<GameOptionsController>();
 
   GameOptionsView({super.key});
 

@@ -9,7 +9,7 @@ void main() {
     GameBinding().dependencies(); // Initialize dependencies
     final GameController gameController = Get.find<GameController>();
 
-    expect(gameController.board.value, Board.initialAsWhitePlayer());
+    expect(gameController.board.value, Board.initial());
 
     gameController.gameResult.value.copyWith;
   });

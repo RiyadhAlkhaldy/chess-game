@@ -44,7 +44,7 @@ abstract class Board with _$Board {
   }) = _Board;
 
   /// Factory constructor to set up the initial state of a chess board.
-  factory Board.initialAsWhitePlayer() {
+  factory Board.initial() {
     final List<List<Piece?>> initialSquares = List.generate(
       8,
       (_) => List.filled(8, null),

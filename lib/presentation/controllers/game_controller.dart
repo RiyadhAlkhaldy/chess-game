@@ -15,6 +15,7 @@ import '../../domain/usecases/get_legal_moves.dart';
 import '../../domain/usecases/is_king_in_check.dart';
 import '../../domain/usecases/make_move.dart';
 import '../../domain/usecases/reset_game.dart';
+import 'get_options_controller.dart';
 
 /// المتحكم (Controller) الرئيسي للعبة الشطرنج.
 /// يدير حالة اللعبة ويتفاعل مع الـ Use Cases.
@@ -26,10 +27,9 @@ class GameController extends GetxController {
   final GetGameResult _getGameResult;
   final IsKingInCheck _isKingInCheck;
   final GetAiMove _getAiMove; // إضافة حالة استخدام الذكاء الاصطناعي
-  PieceColor playerColor = PieceColor.white;
 
   /// حالة اللوحة الحالية التي يتم ملاحظتها بواسطة واجهة المستخدم.
-  final Rx<Board> board = Board.initialAsWhitePlayer().obs;
+  final Rx<Board> board = Board.initial().obs;
 
   /// الخلية المختارة حاليًا من قبل اللاعب.
   final Rx<Cell?> selectedCell = Rx<Cell?>(null);
@@ -42,10 +42,13 @@ class GameController extends GetxController {
 
   /// لون اللاعب البشري (يمكن أن يكون أبيض أو أسود).
   /// يمكن تغيير هذا من خلال إعدادات اللعبة.
-  final PieceColor humanPlayerColor = PieceColor.white;
+  PieceColor humanPlayerColor = PieceColor.white;
 
   /// لون لاعب الذكاء الاصطناعي.
-  final PieceColor aiPlayerColor = PieceColor.black;
+  PieceColor aiPlayerColor = PieceColor.black;
+
+  final gameOptionsController = Get.find<GameOptionsController>();
+  int aiDepth = 3;
 
   /// مُنشئ المتحكم. يتم حقن الـ Use Cases هنا.
   GameController({
@@ -67,12 +70,28 @@ class GameController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+
+    _initialColorsAndAIdepth();
     // مراقبة تغيير اللاعب الحالي لتشغيل دور الذكاء الاصطناعي.
     ever(board, (_) {
       _checkGameStatus();
       _handleAiTurn();
     });
     _updateBoardState();
+  }
+
+  /// initial colors for player and AI
+  _initialColorsAndAIdepth() {
+    /// ai depth
+    aiDepth = gameOptionsController.aiDepth.value;
+
+    /// human color
+    final humanColor = gameOptionsController.meColor.value;
+
+    print("gameOptionsController 11 ${gameOptionsController.aiDepth}");
+    humanPlayerColor = humanColor;
+    aiPlayerColor =
+        humanColor == PieceColor.white ? PieceColor.black : PieceColor.white;
   }
 
   /// تحديث حالة اللوحة من الـ Repository وتحديث [board].
@@ -151,6 +170,7 @@ class GameController extends GetxController {
   /// إعادة تعيين اللعبة إلى حالتها الأولية.
   void resetGame() {
     _resetGame.execute();
+    _initialColorsAndAIdepth();
     _updateBoardState();
     _checkGameStatus();
     _clearSelection();
@@ -169,10 +189,14 @@ class GameController extends GetxController {
         'دور الذكاء الاصطناعي (${aiPlayerColor == PieceColor.white ? 'الأبيض' : 'الأسود'})',
       );
       await Future.delayed(
-        const Duration(milliseconds: 500),
+        const Duration(milliseconds: 100),
       ); // تأخير بسيط لمحاكاة التفكير
 
-      final aiMove = await _getAiMove.execute(board.value, aiPlayerColor);
+      final aiMove = await _getAiMove.execute(
+        board.value,
+        aiPlayerColor,
+        aiDepth,
+      );
 
       if (aiMove != null) {
         debugPrint(

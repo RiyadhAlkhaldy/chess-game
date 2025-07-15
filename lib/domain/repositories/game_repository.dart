@@ -57,5 +57,5 @@ abstract class GameRepository {
   /// [board] هي اللوحة الحالية.
   /// [aiPlayerColor] هو لون اللاعب الذي يلعب به الذكاء الاصطناعي.
   /// تعيد [Move] المقترحة.
-  Future<Move?> getAiMove(Board board, PieceColor aiPlayerColor);
+  Future<Move?> getAiMove(Board board, PieceColor aiPlayerColor,int aiDepth);
 }

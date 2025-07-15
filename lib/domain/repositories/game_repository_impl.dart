@@ -17,7 +17,7 @@ class GameRepositoryImpl implements GameRepository {
   List<Board> _boardHistory = []; // لتتبع تكرار اللوحة
 
   /// مُنشئ لـ [GameRepositoryImpl]. يبدأ اللعبة بلوحة أولية للاعب الأبيض.
-  GameRepositoryImpl() : _currentBoard = Board.initialAsWhitePlayer() {
+  GameRepositoryImpl() : _currentBoard = Board.initial() {
     _boardHistory.add(_currentBoard);
   }
 
@@ -354,7 +354,7 @@ class GameRepositoryImpl implements GameRepository {
 
   @override
   void resetGame() {
-    _currentBoard = Board.initialAsWhitePlayer();
+    _currentBoard = Board.initial();
     _boardHistory = [_currentBoard]; // إعادة تعيين تاريخ اللوحة أيضًا
   }
 
@@ -705,11 +705,14 @@ class GameRepositoryImpl implements GameRepository {
 
   /// العمق الأقصى لـ Minimax.
   /// (يمكن زيادته للحصول على AI أقوى، ولكنه يزيد من وقت المعالجة).
-  static const int _maxMinimaxDepth =
-      3; // مثال: 3 حركات للأمام (1 للـ AI, 1 للخصم, 1 للـ AI)
+  int maxMinimaxDepth = 3; // مثال: 3 حركات للأمام (1 للـ AI, 1 للخصم, 1 للـ AI)
 
   @override
-  Future<Move?> getAiMove(Board board, PieceColor aiPlayerColor) async {
+  Future<Move?> getAiMove(
+    Board board,
+    PieceColor aiPlayerColor,
+    int aiDepth,
+  ) async {
     // إذا لم تكن هناك حركات قانونية، لا يوجد تحرك للذكاء الاصطناعي.
     if (!hasAnyLegalMoves(aiPlayerColor)) {
       return null;
@@ -720,7 +723,7 @@ class GameRepositoryImpl implements GameRepository {
       board: board.copyWith(
         currentPlayer: aiPlayerColor,
       ), // تأكد أن اللاعب الحالي هو AI
-      depth: _maxMinimaxDepth,
+      depth: aiDepth,
       maximizingPlayer: true, // الذكاء الاصطناعي يحاول تعظيم نتيجته
       aiPlayerColor: aiPlayerColor,
     );

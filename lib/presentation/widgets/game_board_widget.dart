@@ -17,6 +17,8 @@ class GameBoardWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return GetX<GameController>(
       builder: (controller) {
+        final humanPlayerColor =
+            controller.humanPlayerColor == PieceColor.white ? true : false;
         final currentBoard =
             controller
                 .board
@@ -28,15 +30,10 @@ class GameBoardWidget extends StatelessWidget {
 
         return Transform.rotate(
           angle:
-              controller.playerColor == PieceColor.white
+              humanPlayerColor
                   ? 0
                   : 3.14159, // Rotate the board for black player
-
           child: GridView.builder(
-            // reverse:
-            //     controller.playerColor == PieceColor.white
-            //         ? false
-            //         : true, // Reverse the order of rows to match chessboard layout
             shrinkWrap: true, // Takes only the space it needs
             physics: const NeverScrollableScrollPhysics(), // Prevent scrolling
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -88,23 +85,20 @@ class GameBoardWidget extends StatelessWidget {
                 // },
                 builder: (context, candidateData, rejectedData) {
                   // The builder function defines the UI of the DragTarget.
-                  return Transform.rotate(
-                    angle:
-                        controller.playerColor == PieceColor.white
-                            ? 0
-                            : 3.14159, // Rotate the board for black player
-                    child: GestureDetector(
-                      onTap: () {
-                        controller.onCellTap(cell);
-                      }, // Handle tap events for piece selection/movement
-                      child: CellWidget(
-                        cell: cell,
-                        isWhite: (row + col) % 2 == 0, // Determine cell color
-                        isSelected: isSelected,
-                        isLegalMoveTarget: isLegalMoveTarget,
-                        child:
-                            piece != null
-                                ? PieceWidget(
+                  return GestureDetector(
+                    onTap: () {
+                      controller.onCellTap(cell);
+                    }, // Handle tap events for piece selection/movement
+                    child: CellWidget(
+                      cell: cell,
+                      isWhite: (row + col) % 2 == 0, // Determine cell color
+                      isSelected: isSelected,
+                      isLegalMoveTarget: isLegalMoveTarget,
+                      child:
+                          piece != null
+                              ? Transform.rotate(
+                                angle: humanPlayerColor ? 0 : 3.14159,
+                                child: PieceWidget(
                                   piece: piece,
                                   currentCell: cell,
                                   onDragStarted: () {
@@ -112,9 +106,9 @@ class GameBoardWidget extends StatelessWidget {
                                     // so its legal moves can be highlighted.
                                     // controller.selectCell(cell);
                                   },
-                                )
-                                : null, // No piece if cell is empty
-                      ),
+                                ),
+                              )
+                              : null, // No piece if cell is empty
                     ),
                   );
                 },
