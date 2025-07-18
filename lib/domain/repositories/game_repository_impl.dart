@@ -1,5 +1,7 @@
 // lib/data/repositories/game_repository_impl.dart
 
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 // import 'package:collection/collection.dart'; // لتسهيل مقارنة القوائم
@@ -115,6 +117,10 @@ class GameRepositoryImpl implements GameRepository {
             !_currentBoard.isCellUnderAttack(
               kingColor,
               Cell(row: kingRow, col: 2),
+            ) &&
+            !_currentBoard.isCellUnderAttack(
+              kingColor,
+              Cell(row: kingRow, col: 1),
             )) {
           moves.add(
             Move(
@@ -705,7 +711,7 @@ class GameRepositoryImpl implements GameRepository {
 
   /// العمق الأقصى لـ Minimax.
   /// (يمكن زيادته للحصول على AI أقوى، ولكنه يزيد من وقت المعالجة).
-  int maxMinimaxDepth = 3; // مثال: 3 حركات للأمام (1 للـ AI, 1 للخصم, 1 للـ AI)
+  static const int _maxMinimaxDepth = 3; // مثال: 3 حركات للأمام
 
   @override
   Future<Move?> getAiMove(
@@ -713,22 +719,21 @@ class GameRepositoryImpl implements GameRepository {
     PieceColor aiPlayerColor,
     int aiDepth,
   ) async {
-    // إذا لم تكن هناك حركات قانونية، لا يوجد تحرك للذكاء الاصطناعي.
     if (!hasAnyLegalMoves(aiPlayerColor)) {
       return null;
     }
 
-    // تشغيل خوارزمية Minimax
+    // تشغيل خوارزمية Minimax مع قيم ألفا وبيتا الأولية
     final result = await _minimax(
-      board: board.copyWith(
-        currentPlayer: aiPlayerColor,
-      ), // تأكد أن اللاعب الحالي هو AI
+      board: board.copyWith(currentPlayer: aiPlayerColor),
       depth: aiDepth,
-      maximizingPlayer: true, // الذكاء الاصطناعي يحاول تعظيم نتيجته
+      maximizingPlayer: true,
       aiPlayerColor: aiPlayerColor,
+      alpha: -double.maxFinite.toInt(), // قيمة ألفا الأولية
+      beta: double.maxFinite.toInt(), // قيمة بيتا الأولية
     );
 
-    return result.move; // إرجاع أفضل حركة وجدتها Minimax
+    return result.move;
   }
 
   /// دالة تقييم اللوحة.
@@ -740,6 +745,7 @@ class GameRepositoryImpl implements GameRepository {
         final piece = board.squares[r][c];
         if (piece != null) {
           final pieceValue = _pieceValues[piece.type] ?? 0;
+          // إضافة قيمة القطعة إذا كانت للذكاء الاصطناعي، وطرحها إذا كانت للخصم
           if (piece.color == aiPlayerColor) {
             score += pieceValue;
           } else {
@@ -748,37 +754,100 @@ class GameRepositoryImpl implements GameRepository {
         }
       }
     }
+
+    // إضافة مكافأة بسيطة لأمان الملك إذا لم يكن في كش
+    if (!board.isKingInCheck(aiPlayerColor)) {
+      score += 50;
+    }
+    if (!board.isKingInCheck(
+      aiPlayerColor == PieceColor.white ? PieceColor.black : PieceColor.white,
+    )) {
+      score -= 50; // خصم إذا لم يكن ملك الخصم في كش
+    }
+
+    // مكافأة للسيطرة على المركز (يمكن أن تكون أكثر تعقيدًا)
+    // على سبيل المثال، مربعات d4, e4, d5, e5 تعتبر مربعات مركزية
+    final centerCells = [
+      const Cell(row: 3, col: 3),
+      const Cell(row: 3, col: 4),
+      const Cell(row: 4, col: 3),
+      const Cell(row: 4, col: 4),
+    ];
+    for (var cell in centerCells) {
+      final piece = board.getPieceAt(cell);
+      if (piece != null) {
+        if (piece.color == aiPlayerColor) {
+          score += 10;
+        } else {
+          score -= 10;
+        }
+      }
+    }
+
     return score;
   }
 
-  /// تنفيذ خوارزمية Minimax.
+  /// تنفيذ خوارزمية Minimax مع تقليم ألفا-بيتا.
   /// [board]: اللوحة الحالية.
   /// [depth]: العمق المتبقي للبحث.
   /// [maximizingPlayer]: صحيح إذا كان اللاعب الحالي هو لاعب التعظيم (AI).
   /// [aiPlayerColor]: لون قطع الذكاء الاصطناعي.
+  /// [alpha]: أفضل قيمة (الحد الأدنى) تم العثور عليها حتى الآن في مسار لاعب التعظيم.
+  /// [beta]: أفضل قيمة (الحد الأقصى) تم العثور عليها حتى الآن في مسار لاعب التقليل.
   Future<({int score, Move? move})> _minimax({
     required Board board,
     required int depth,
     required bool maximizingPlayer,
     required PieceColor aiPlayerColor,
+    required int alpha,
+    required int beta,
   }) async {
     // 1. حالة القاعدة (Base Case):
     // إذا وصلنا إلى أقصى عمق للبحث أو كانت اللعبة قد انتهت.
-    //TODO
-    // if (depth == 0 || board.getGameResult().outcome != GameOutcome.playing) {
-    if (depth == 0 || getGameResult().outcome != GameOutcome.playing) {
+    if (depth == 0) {
       return (score: _evaluateBoard(board, aiPlayerColor), move: null);
     }
 
-    final currentPlayerColor = board.currentPlayer;
+    // تحقق من نهاية اللعبة مبكرًا
+    final gameOutcome = _checkGameEndConditionsForBoard(board).outcome;
+    if (gameOutcome != GameOutcome.playing) {
+      if (gameOutcome == GameOutcome.checkmate) {
+        // إذا كان هناك كش ملك، فإن الفائز هو من ليس دوره
+        final winnerIsAI =
+            (gameOutcome == GameOutcome.checkmate &&
+                board.currentPlayer != aiPlayerColor);
+        return (
+          score:
+              winnerIsAI ? double.maxFinite.toInt() : -double.maxFinite.toInt(),
+          move: null,
+        );
+      } else if (gameOutcome == GameOutcome.stalemate ||
+          gameOutcome == GameOutcome.draw) {
+        return (score: 0, move: null); // التعادل له قيمة 0
+      }
+    }
 
-    // 2. توليد جميع الحركات القانونية للاعب الحالي
-    // ملاحظة: نحتاج إلى قائمة بالحركات القانونية للوحة الحالية،
-    // وليس اللوحة العالمية _currentBoard.
+    final currentPlayerColor = board.currentPlayer;
     final List<Move> legalMovesForBoard = _getAllLegalMovesForBoard(
       board,
       currentPlayerColor,
     );
+
+    // إذا لم يكن هناك حركات قانونية في هذا العمق، ارجع التقييم الحالي.
+    if (legalMovesForBoard.isEmpty) {
+      final currentOutcome = _checkGameEndConditionsForBoard(board);
+      if (currentOutcome.outcome == GameOutcome.checkmate) {
+        final winnerIsAI = (currentOutcome.winner == aiPlayerColor);
+        return (
+          score:
+              winnerIsAI ? double.maxFinite.toInt() : -double.maxFinite.toInt(),
+          move: null,
+        );
+      } else if (currentOutcome.outcome == GameOutcome.stalemate) {
+        return (score: 0, move: null);
+      }
+      return (score: _evaluateBoard(board, aiPlayerColor), move: null);
+    }
 
     if (maximizingPlayer) {
       // لاعب التعظيم (AI): يحاول زيادة النتيجة إلى أقصى حد
@@ -797,18 +866,25 @@ class GameRepositoryImpl implements GameRepository {
           depth: depth - 1,
           maximizingPlayer: false, // الآن دور لاعب التقليل
           aiPlayerColor: aiPlayerColor,
+          alpha: alpha,
+          beta: beta,
         );
 
         if (evalResult.score > maxEval) {
           maxEval = evalResult.score;
           bestMove = move;
         }
+        alpha = max(alpha, evalResult.score); // تحديث ألفا
+        if (beta <= alpha) {
+          break; // تقليم بيتا
+        }
       }
       return (score: maxEval, move: bestMove);
     } else {
       // لاعب التقليل (الخصم): يحاول تقليل النتيجة إلى أقصى حد
       int minEval = double.maxFinite.toInt();
-      Move? bestMove; // لن نحتاج لـ bestMove هنا إذا كنا مهتمين فقط بحركة AI
+      Move?
+      bestMove; // يتم الاحتفاظ بها لأغراض التتبع إذا لزم الأمر، ولكنها غير مستخدمة لاختيار حركة AI
 
       for (final move in legalMovesForBoard) {
         final simulatedBoard = simulateMove(board, move);
@@ -822,11 +898,17 @@ class GameRepositoryImpl implements GameRepository {
           depth: depth - 1,
           maximizingPlayer: true, // الآن دور لاعب التعظيم (AI)
           aiPlayerColor: aiPlayerColor,
+          alpha: alpha,
+          beta: beta,
         );
 
         if (evalResult.score < minEval) {
           minEval = evalResult.score;
-          bestMove = move; // نحدثها هنا أيضًا لضمان اختيار حركة ما
+          bestMove = move;
+        }
+        beta = min(beta, evalResult.score); // تحديث بيتا
+        if (beta <= alpha) {
+          break; // تقليم ألفا
         }
       }
       return (score: minEval, move: bestMove);

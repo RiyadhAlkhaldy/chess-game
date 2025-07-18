@@ -51,8 +51,8 @@ class PieceWidget extends StatelessWidget {
       onDragUpdate: (details) {},
       onDraggableCanceled: (velocity, offset) {},
 
-      data:
-          this, // The data being dragged is this widget itself (contains currentCell)
+      // data:
+      //     this, // The data being dragged is this widget itself (contains currentCell)
       feedback: SizedBox(
         width: 46,
         height: 46,
