@@ -51,7 +51,7 @@ class ChessApp extends StatelessWidget {
           onSurface: Colors.blueGrey[900]!, // Lighter dark cell background
         ),
       ),
-      themeMode: ThemeMode.system, // Default to system theme
+      themeMode: ThemeMode.light, // Default to system theme
       getPages: AppPages.routes,
     );
   }

@@ -21,3 +21,10 @@ abstract class Cell with _$Cell {
 extension CellValidate on Cell {
   bool isValid() => row >= 0 && row < 8 && col >= 0 && col < 8;
 }
+
+extension CellColor on Cell {
+  /// يتحقق مما إذا كانت الخلية ذات لون فاتح (أبيض) أو داكن (أسود).
+  /// تُستخدم لتحديد لون مربع الأسقف.
+  bool isLightSquare() => (row + col) % 2 == 0;
+  bool isDarkSquare() => (row + col) % 2 != 0;
+}

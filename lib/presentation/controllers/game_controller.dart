@@ -73,10 +73,10 @@ class GameController extends GetxController {
 
     _initialColorsAndAIdepth();
     // مراقبة تغيير اللاعب الحالي لتشغيل دور الذكاء الاصطناعي.
-    ever(board, (_) {
-      _checkGameStatus();
-      _handleAiTurn();
-    });
+    // ever(board, (_) {
+    _checkGameStatus();
+    // _handleAiTurn();
+    // });
     _updateBoardState();
   }
 
@@ -114,10 +114,12 @@ class GameController extends GetxController {
     // السماح بالحركة فقط إذا كان الدور للاعب البشري.
     if (board.value.currentPlayer != humanPlayerColor) {
       debugPrint('ليس دورك يا لاعب! انتظر الذكاء الاصطناعي.');
-      return;
+      // return;
     }
 
     final Piece? pieceAtCell = board.value.getPieceAt(cell);
+    debugPrint(cell.toString());
+    debugPrint(pieceAtCell.toString());
 
     if (selectedCell.value == null) {
       // لم يتم تحديد أي قطعة بعد.

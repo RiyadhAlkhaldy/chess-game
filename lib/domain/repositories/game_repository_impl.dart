@@ -1,10 +1,8 @@
 // lib/data/repositories/game_repository_impl.dart
-
 import 'dart:math';
 
+import 'package:collection/collection.dart'; // لتسهيل مقارنة القوائم
 import 'package:flutter/material.dart';
-
-// import 'package:collection/collection.dart'; // لتسهيل مقارنة القوائم
 
 import '../../domain/entities/board.dart';
 import '../../domain/entities/cell.dart';
@@ -15,34 +13,37 @@ import '../../domain/repositories/game_repository.dart';
 
 /// تطبيق [GameRepository] الذي يحتوي على منطق لعبة الشطرنج الفعلي.
 class GameRepositoryImpl implements GameRepository {
-  Board _currentBoard;
+  Board currentBoard;
   List<Board> _boardHistory = []; // لتتبع تكرار اللوحة
 
   /// مُنشئ لـ [GameRepositoryImpl]. يبدأ اللعبة بلوحة أولية للاعب الأبيض.
-  GameRepositoryImpl() : _currentBoard = Board.initial() {
-    _boardHistory.add(_currentBoard);
+  GameRepositoryImpl() : currentBoard = Board.initial() {
+    _boardHistory.add(currentBoard);
   }
 
   @override
   Board getCurrentBoard() {
-    return _currentBoard;
+    return currentBoard;
   }
 
   @override
   List<Move> getLegalMoves(Cell cell) {
-    final piece = _currentBoard.getPieceAt(cell);
-    if (piece == null || piece.color != _currentBoard.currentPlayer) {
+    final piece = currentBoard.getPieceAt(cell);
+    if (piece == null || piece.color != currentBoard.currentPlayer) {
       return []; // لا توجد قطعة أو ليست قطعة اللاعب الحالي
     }
 
     // الحصول على الحركات الأولية للقطعة (بغض النظر عن الكش)
-    final rawMoves = piece.getRawMoves(_currentBoard, cell);
+    final rawMoves = piece.getRawMoves(currentBoard, cell);
 
     // تصفية الحركات لإزالة تلك التي تضع الملك في كش
     final legalMoves =
         rawMoves.where((move) {
-          return !isMoveResultingInCheck(_currentBoard, move);
+          // debugPrint("isMoveResultingInCheck $piece ");
+
+          return !isMoveResultingInCheck(currentBoard, move);
         }).toList();
+    // debugPrint("isMoveResultingInCheck 3 $legalMoves");
 
     // إضافة حركات الكاستلينج القانونية (يتم التحقق منها هنا بشكل كامل)
     if (piece.type == PieceType.king) {
@@ -63,28 +64,28 @@ class GameRepositoryImpl implements GameRepository {
     Cell kingCell,
     PieceColor kingColor,
   ) {
-    if (kingColor != _currentBoard.currentPlayer) return;
-    if (_currentBoard.isKingInCheck(kingColor)) {
+    if (kingColor != currentBoard.currentPlayer) return;
+    if (currentBoard.isKingInCheck(kingColor)) {
       return; // لا يمكن الكاستلينج إذا كان الملك في كش
     }
 
     final int kingRow = kingColor == PieceColor.white ? 7 : 0;
 
     // الكاستلينج لجهة الملك (King-side Castling)
-    if (_currentBoard.castlingRights[kingColor]![CastlingSide.kingSide]!) {
+    if (currentBoard.castlingRights[kingColor]![CastlingSide.kingSide]!) {
       final Cell rookCell = Cell(row: kingRow, col: 7);
-      final Piece? rook = _currentBoard.getPieceAt(rookCell);
+      final Piece? rook = currentBoard.getPieceAt(rookCell);
 
       if (rook is Rook &&
           !rook.hasMoved &&
-          _currentBoard.getPieceAt(Cell(row: kingRow, col: 5)) == null &&
-          _currentBoard.getPieceAt(Cell(row: kingRow, col: 6)) == null) {
+          currentBoard.getPieceAt(Cell(row: kingRow, col: 5)) == null &&
+          currentBoard.getPieceAt(Cell(row: kingRow, col: 6)) == null) {
         // التحقق من أن المربعات التي يمر بها الملك ليست مهددة
-        if (!_currentBoard.isCellUnderAttack(
+        if (!currentBoard.isCellUnderAttack(
               kingColor,
               Cell(row: kingRow, col: 5),
             ) &&
-            !_currentBoard.isCellUnderAttack(
+            !currentBoard.isCellUnderAttack(
               kingColor,
               Cell(row: kingRow, col: 6),
             )) {
@@ -100,25 +101,25 @@ class GameRepositoryImpl implements GameRepository {
     }
 
     // الكاستلينج لجهة الملكة (Queen-side Castling)
-    if (_currentBoard.castlingRights[kingColor]![CastlingSide.queenSide]!) {
+    if (currentBoard.castlingRights[kingColor]![CastlingSide.queenSide]!) {
       final Cell rookCell = Cell(row: kingRow, col: 0);
-      final Piece? rook = _currentBoard.getPieceAt(rookCell);
+      final Piece? rook = currentBoard.getPieceAt(rookCell);
 
       if (rook is Rook &&
           !rook.hasMoved &&
-          _currentBoard.getPieceAt(Cell(row: kingRow, col: 3)) == null &&
-          _currentBoard.getPieceAt(Cell(row: kingRow, col: 2)) == null &&
-          _currentBoard.getPieceAt(Cell(row: kingRow, col: 1)) == null) {
+          currentBoard.getPieceAt(Cell(row: kingRow, col: 3)) == null &&
+          currentBoard.getPieceAt(Cell(row: kingRow, col: 2)) == null &&
+          currentBoard.getPieceAt(Cell(row: kingRow, col: 1)) == null) {
         // التحقق من أن المربعات التي يمر بها الملك ليست مهددة
-        if (!_currentBoard.isCellUnderAttack(
+        if (!currentBoard.isCellUnderAttack(
               kingColor,
               Cell(row: kingRow, col: 3),
             ) &&
-            !_currentBoard.isCellUnderAttack(
+            !currentBoard.isCellUnderAttack(
               kingColor,
               Cell(row: kingRow, col: 2),
             ) &&
-            !_currentBoard.isCellUnderAttack(
+            !currentBoard.isCellUnderAttack(
               kingColor,
               Cell(row: kingRow, col: 1),
             )) {
@@ -140,7 +141,7 @@ class GameRepositoryImpl implements GameRepository {
     Cell pawnCell,
     PieceColor pawnColor,
   ) {
-    if (_currentBoard.enPassantTarget == null) return;
+    if (currentBoard.enPassantTarget == null) return;
 
     final int direction = pawnColor == PieceColor.white ? -1 : 1;
     final int targetRow = pawnCell.row + direction;
@@ -153,19 +154,19 @@ class GameRepositoryImpl implements GameRepository {
 
     for (final adjacentCell in adjacentCells) {
       if (adjacentCell.isValid()) {
-        final Piece? adjacentPiece = _currentBoard.getPieceAt(adjacentCell);
+        final Piece? adjacentPiece = currentBoard.getPieceAt(adjacentCell);
         if (adjacentPiece is Pawn &&
             adjacentPiece.color != pawnColor &&
-            _currentBoard.enPassantTarget ==
+            currentBoard.enPassantTarget ==
                 Cell(row: targetRow, col: adjacentCell.col) &&
-            _currentBoard.moveHistory.isNotEmpty) {
+            currentBoard.moveHistory.isNotEmpty) {
           // التحقق مما إذا كانت الحركة الأخيرة هي حركة بيدق مزدوجة للبيدق المستهدف
-          final lastMove = _currentBoard.moveHistory.last;
+          final lastMove = currentBoard.moveHistory.last;
           if (lastMove.isTwoStepPawnMove && lastMove.end == adjacentCell) {
             moves.add(
               Move(
                 start: pawnCell,
-                end: _currentBoard.enPassantTarget!,
+                end: currentBoard.enPassantTarget!,
                 isEnPassant: true,
                 isCapture: true, // En Passant هو نوع من أنواع الأسر
               ),
@@ -178,12 +179,12 @@ class GameRepositoryImpl implements GameRepository {
 
   @override
   Board makeMove(Move move) {
-    Board newBoard = _currentBoard.copyWithDeepPieces();
+    Board newBoard = currentBoard.copyWithDeepPieces();
     final Piece? pieceToMove = newBoard.getPieceAt(move.start);
 
     if (pieceToMove == null) {
       debugPrint("خطأ: لا توجد قطعة في خلية البداية.");
-      return _currentBoard; // لا تفعل شيئًا إذا لم تكن هناك قطعة
+      return currentBoard; // لا تفعل شيئًا إذا لم تكن هناك قطعة
     }
 
     // تحديث hasMoved للقطعة التي تتحرك
@@ -328,12 +329,12 @@ class GameRepositoryImpl implements GameRepository {
 
     // تحديث اللاعب الحالي
     final PieceColor nextPlayer =
-        _currentBoard.currentPlayer == PieceColor.white
+        currentBoard.currentPlayer == PieceColor.white
             ? PieceColor.black
             : PieceColor.white;
 
     newBoard = newBoard.copyWith(
-      moveHistory: List.from(_currentBoard.moveHistory)..add(move),
+      moveHistory: List.from(currentBoard.moveHistory)..add(move),
       currentPlayer: nextPlayer,
       enPassantTarget: newEnPassantTarget,
       castlingRights: newCastlingRights,
@@ -342,15 +343,15 @@ class GameRepositoryImpl implements GameRepository {
       fullMoveNumber: newFullMoveNumber,
     );
 
-    _currentBoard = newBoard;
-    _boardHistory.add(_currentBoard); // إضافة اللوحة الجديدة إلى سجل التاريخ
+    currentBoard = newBoard.copyWithDeepPieces();
+    _boardHistory.add(currentBoard); // إضافة اللوحة الجديدة إلى سجل التاريخ
 
-    return _currentBoard;
+    return currentBoard;
   }
 
   @override
   bool isKingInCheck(PieceColor kingColor) {
-    return _currentBoard.isKingInCheck(kingColor);
+    return currentBoard.isKingInCheck(kingColor);
   }
 
   @override
@@ -360,87 +361,23 @@ class GameRepositoryImpl implements GameRepository {
 
   @override
   void resetGame() {
-    _currentBoard = Board.initial();
-    _boardHistory = [_currentBoard]; // إعادة تعيين تاريخ اللوحة أيضًا
+    currentBoard = Board.initial();
+    _boardHistory = [currentBoard]; // إعادة تعيين تاريخ اللوحة أيضًا
   }
 
   @override
   Board simulateMove(Board board, Move move) {
-    Board simulatedBoard = board.copyWithDeepPieces();
-    final Piece? pieceToMove = simulatedBoard.getPieceAt(move.start);
-
-    if (pieceToMove == null) {
-      // هذا لا ينبغي أن يحدث إذا كانت الحركة قانونية
-      return simulatedBoard;
-    }
-
-    // لاحظ: هنا لا نغير hasMoved لأنها محاكاة فقط.
-    // يتم تغييرها في makeMove الفعلية.
-    // إذا كنت بحاجة لتغييرها للمحاكاة (مثلاً لفحص الكاستلينج في محاكاة)، ستحتاج لإنشاء نسخة من القطعة.
-    final Piece updatedPieceForSimulation =
-        pieceToMove.copyWith(); // لا تغير hasMoved هنا
-    simulatedBoard = simulatedBoard.placePiece(
-      move.end,
-      updatedPieceForSimulation,
-    );
-    simulatedBoard = simulatedBoard.placePiece(move.start, null);
-
-    // تحديث موقع الملك في اللوحة المحاكاة
-    if (pieceToMove.type == PieceType.king) {
-      final Map<PieceColor, Cell> newKingPositions = Map.from(
-        simulatedBoard.kingPositions,
-      );
-      newKingPositions[pieceToMove.color] = move.end;
-      simulatedBoard = simulatedBoard.copyWith(kingPositions: newKingPositions);
-    }
-
-    // معالجة En Passant في المحاكاة
-    if (move.isEnPassant) {
-      final int capturedPawnRow =
-          pieceToMove.color == PieceColor.white
-              ? move.end.row + 1
-              : move.end.row - 1;
-      final Cell capturedPawnCell = Cell(
-        row: capturedPawnRow,
-        col: move.end.col,
-      );
-      simulatedBoard = simulatedBoard.placePiece(capturedPawnCell, null);
-    }
-
-    // معالجة Castling في المحاكاة
-    if (move.isCastling && pieceToMove.type == PieceType.king) {
-      final int kingRow = pieceToMove.color == PieceColor.white ? 7 : 0;
-      if (move.end.col == 6) {
-        // King-side castling
-        final Cell oldRookCell = Cell(row: kingRow, col: 7);
-        final Cell newRookCell = Cell(row: kingRow, col: 5);
-        final Rook? rook = simulatedBoard.getPieceAt(oldRookCell) as Rook?;
-        if (rook != null) {
-          final Rook updatedRook =
-              rook.copyWith(); // لا تغير hasMoved هنا للمحاكاة
-          simulatedBoard = simulatedBoard.placePiece(newRookCell, updatedRook);
-          simulatedBoard = simulatedBoard.placePiece(oldRookCell, null);
-        }
-      } else if (move.end.col == 2) {
-        // Queen-side castling
-        final Cell oldRookCell = Cell(row: kingRow, col: 0);
-        final Cell newRookCell = Cell(row: kingRow, col: 3);
-        final Rook? rook = simulatedBoard.getPieceAt(oldRookCell) as Rook?;
-        if (rook != null) {
-          final Rook updatedRook =
-              rook.copyWith(); // لا تغير hasMoved هنا للمحاكاة
-          simulatedBoard = simulatedBoard.placePiece(newRookCell, updatedRook);
-          simulatedBoard = simulatedBoard.placePiece(oldRookCell, null);
-        }
-      }
-    }
-
-    return simulatedBoard;
+    return SimulateMove.simulateMove(board, move);
   }
 
   @override
   bool isMoveResultingInCheck(Board board, Move move) {
     final simulatedBoard = simulateMove(board, move);
+    // debugPrint(" is ${simulatedBoard == board}");
+    // debugPrint("isMoveResultingInCheck 2 $move");
+    // debugPrint(
+    //   "isMoveResultingInCheck 2.5 ${simulatedBoard.currentPlayer.toString()} mm ${board.currentPlayer.toString()} mm",
+    // )
     // التحقق من أن الملك الخاص باللاعب الذي قام بالحركة ليس في كش بعد الحركة.
     return simulatedBoard.isKingInCheck(board.currentPlayer);
   }
@@ -448,14 +385,17 @@ class GameRepositoryImpl implements GameRepository {
   @override
   List<Move> getAllLegalMovesForCurrentPlayer() {
     final List<Move> allLegalMoves = [];
-    final currentPlayerColor = _currentBoard.currentPlayer;
+    final currentPlayerColor = currentBoard.currentPlayer;
 
     for (int r = 0; r < 8; r++) {
       for (int c = 0; c < 8; c++) {
         final currentCell = Cell(row: r, col: c);
-        final piece = _currentBoard.getPieceAt(currentCell);
+        final piece = currentBoard.getPieceAt(currentCell);
         if (piece != null && piece.color == currentPlayerColor) {
-          allLegalMoves.addAll(getLegalMoves(currentCell));
+          final legalmoves = getLegalMoves(currentCell);
+          if (legalmoves.isNotEmpty) {
+            allLegalMoves.addAll(legalmoves);
+          }
         }
       }
     }
@@ -467,237 +407,158 @@ class GameRepositoryImpl implements GameRepository {
     // لحساب الحركات القانونية للاعب، نحتاج إلى التأكد من أن isKingInCheck
     // والمنطق يعتمد على "اللاعب الحالي" في اللوحة.
     // نقوم بتغيير currentPlayer مؤقتًا إذا لم يكن اللون المطلوب.
-    final originalCurrentPlayer = _currentBoard.currentPlayer;
-    _currentBoard = _currentBoard.copyWith(currentPlayer: playerColor);
+    final originalCurrentPlayer = currentBoard.currentPlayer;
+    currentBoard = currentBoard.copyWith(currentPlayer: playerColor);
 
     final bool hasMoves = getAllLegalMovesForCurrentPlayer().isNotEmpty;
 
     // استعادة اللاعب الحالي الأصلي
-    _currentBoard = _currentBoard.copyWith(
-      currentPlayer: originalCurrentPlayer,
-    );
+    currentBoard = currentBoard.copyWith(currentPlayer: originalCurrentPlayer);
     return hasMoves;
   }
 
+  /// التحقق من التعادل بتكرار الوضعية ثلاث مرات.
+  /// يحدث عندما تظهر نفس الوضعية ثلاث مرات على الأقل في سجل اللعبة.
+  // bool _isThreefoldRepetition() {
+  //   if (_boardHistory.length < 5) {
+  //     return false; // تحتاج على الأقل 5 لوحات لتكرار ثلاثي (حركتان لكل لاعب + اللوحة الحالية)
+  //   }
+  //   final currentFen = currentBoard.toFenString();
+  //   int count = 0;
+  //   for (final fen in currentBoard.positionHistory) {
+  //     if (fen == currentFen) {
+  //       count++;
+  //     }
+  //   }
+  //   return count >= 3;
+  // }
+
+  // @override
+  // GameResult checkGameEndConditions() {
+  //   final currentPlayerColor = currentBoard.currentPlayer;
+  //   // 1. تحقق من التعادل أولاً
+  //   final drawOutcome = checkForDrawConditions();
+
+  //   if (drawOutcome != null) {
+  //     return drawOutcome;
+  //   }
+
+  //   // return GameResult.playing();
+  //   // 2. تحقق من كش ملك / طريق مسدود
+  //   final bool kingInCheck = isKingInCheck(currentPlayerColor);
+  //   final bool hasNoLegalMoves = !hasAnyLegalMoves(currentPlayerColor);
+  //   if (!kingInCheck && hasNoLegalMoves) {
+  //     // طريق مسدود
+  //     return GameResult.stalemate();
+  //   }
+  //   if (kingInCheck && hasNoLegalMoves) {
+  //     // كش ملك
+  //     final PieceColor winner =
+  //         currentPlayerColor == PieceColor.white
+  //             ? PieceColor.black
+  //             : PieceColor.white;
+  //     return GameResult.checkmate(winner);
+  //   }
+
+  //   return GameResult.playing(); // اللعبة ما زالت مستمرة
+  // }
+
+  // @override
+  // GameResult? checkForDrawConditions() {
+  //   // 2. التكرار الثلاثي
+  //   if (_isThreefoldRepetition()) {
+  //     return GameResult.draw(DrawReason.threefoldRepetition);
+  //   }
+
+  //   return CheckDrawUseCaseImpl().execute(currentBoard);
+
+  //   // يمكنك إضافة التعادل بالاتفاق هنا، لكنه يتطلب مدخلات من المستخدم
+  //   // return null; // لا يوجد تعادل حاليًا
+  // }
+
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+  ///
+
   @override
   GameResult checkGameEndConditions() {
-    final currentPlayerColor = _currentBoard.currentPlayer;
+    final currentPlayerColor =
+        currentBoard.currentPlayer; // استخدام _currentBoard
 
-    // 1. تحقق من التعادل أولاً
-    final drawOutcome = checkForDrawConditions();
-    if (drawOutcome != null) {
-      if (drawOutcome == GameOutcome.stalemate) {
+    // 1. تحقق أولاً من وجود حركات قانونية
+    final bool hasNoLegalMoves = !hasAnyLegalMoves(currentPlayerColor);
+    final bool kingInCheck = isKingInCheck(currentPlayerColor);
+    // return GameResult.stalemate();
+
+    if (hasNoLegalMoves) {
+      if (kingInCheck) {
+        // كش ملك
+        final PieceColor winner =
+            currentPlayerColor == PieceColor.white
+                ? PieceColor.black
+                : PieceColor.white;
+        return GameResult.checkmate(winner);
+      } else {
+        // طريق مسدود (لا يوجد كش ملك ولا حركات قانونية)
         return GameResult.stalemate();
-      } else if (drawOutcome == GameOutcome.draw) {
-        return GameResult.draw(
-          DrawReason.insufficientMaterial,
-        ); // تحديد سبب التعادل هنا
       }
     }
 
-    // 2. تحقق من كش ملك / طريق مسدود
-    final bool kingInCheck = isKingInCheck(currentPlayerColor);
-    final bool hasNoLegalMoves = !hasAnyLegalMoves(currentPlayerColor);
-
-    if (kingInCheck && hasNoLegalMoves) {
-      // كش ملك
-      final PieceColor winner =
-          currentPlayerColor == PieceColor.white
-              ? PieceColor.black
-              : PieceColor.white;
-      return GameResult.checkmate(winner);
-    } else if (!kingInCheck && hasNoLegalMoves) {
-      // طريق مسدود
-      return GameResult.stalemate();
-    } else if (drawOutcome == GameOutcome.draw) {
-      // إذا كان هناك تعادل لأسباب أخرى غير الطريق المسدود (مثل الخمسين حركة أو التكرار الثلاثي)
-      // هذا الشرط ضروري لتغطية الحالات التي لا تكون فيها كش ملك أو طريق مسدود ولكنها تعادل.
-      return GameResult.draw(
-        DrawReason.insufficientMaterial,
-      ); // يجب أن يتم تحديده بدقة أكبر
+    // 2. إذا كان هناك حركات قانونية، تحقق من شروط التعادل الأخرى
+    final DrawReason? drawReason = checkForDrawConditions();
+    if (drawReason != null) {
+      return GameResult.draw(drawReason);
     }
 
-    return GameResult.playing(); // اللعبة ما زالت مستمرة
+    // 3. إذا لم يتم تحديد أي نهاية للعبة، فاللعبة مستمرة
+    return GameResult.playing();
   }
 
+  // lib/data/repositories/game_repository_impl.dart
+
+  // ... (الاستيرادات وبقية الكود) ...
+
   @override
-  GameOutcome? checkForDrawConditions() {
+  DrawReason? checkForDrawConditions() {
     // 1. التعادل بالمواد غير الكافية
     if (_isInsufficientMaterialDraw()) {
-      return GameOutcome.draw;
+      return DrawReason.insufficientMaterial;
     }
 
     // 2. قاعدة الخمسين حركة
-    if (_currentBoard.halfMoveClock >= 100) {
-      // 100 نصف حركة = 50 حركة كاملة
-      return GameOutcome.draw;
+    if (currentBoard.halfMoveClock >= 100) {
+      return DrawReason.fiftyMoveRule;
     }
 
     // 3. التكرار الثلاثي
     if (_isThreefoldRepetition()) {
-      return GameOutcome.draw;
+      return DrawReason.threefoldRepetition;
     }
 
-    // يمكنك إضافة التعادل بالاتفاق هنا، لكنه يتطلب مدخلات من المستخدم
-    return null; // لا يوجد تعادل حاليًا
+    // التعادل بالاتفاق لا يتم التحقق منه هنا لأنه يتطلب تفاعل المستخدم
+    return null; // لا يوجد تعادل حاليًا من القواعد
   }
-
-  /// يتحقق مما إذا كانت اللوحة الحالية قد تكررت ثلاث مرات.
-  bool _isThreefoldRepetition() {
-    if (_boardHistory.length < 5) {
-      return false; // تحتاج على الأقل 5 لوحات لتكرار ثلاثي (حركتان لكل لاعب + اللوحة الحالية)
-    }
-
-    final currentBoardFEN = _boardToFEN(_currentBoard);
-    int count = 0;
-    // ابحث في سجل اللوحات (تجاهل اللوحة الأخيرة التي تمت إضافتها للتو)
-    for (int i = 0; i < _boardHistory.length - 1; i++) {
-      if (_boardToFEN(_boardHistory[i]) == currentBoardFEN) {
-        count++;
-      }
-    }
-    return count >=
-        2; // إذا كانت اللوحة الحالية هي التكرار الثالث، يجب أن يكون قد ظهرت مرتين بالفعل في السجل
-  }
-
-  /// دالة مساعدة لتحويل حالة اللوحة إلى تمثيل FEN مبسط
-  /// يستخدم لمقارنة اللوحات لتحديد التكرار الثلاثي.
-  /// (ملاحظة: هذا ليس FEN كاملًا ودقيقًا وفقًا لمعايير الشطرنج، ولكنه كافٍ للمقارنة الداخلية)
-  String _boardToFEN(Board board) {
-    String fen = '';
-    for (int r = 0; r < 8; r++) {
-      int emptyCount = 0;
-      for (int c = 0; c < 8; c++) {
-        final piece = board.squares[r][c];
-        if (piece == null) {
-          emptyCount++;
-        } else {
-          if (emptyCount > 0) {
-            fen += '$emptyCount';
-            emptyCount = 0;
-          }
-          String pieceChar = '';
-          switch (piece.type) {
-            case PieceType.pawn:
-              pieceChar = 'p';
-              break;
-            case PieceType.rook:
-              pieceChar = 'r';
-              break;
-            case PieceType.knight:
-              pieceChar = 'n';
-              break;
-            case PieceType.bishop:
-              pieceChar = 'b';
-              break;
-            case PieceType.queen:
-              pieceChar = 'q';
-              break;
-            case PieceType.king:
-              pieceChar = 'k';
-              break;
-          }
-          fen +=
-              (piece.color == PieceColor.white
-                  ? pieceChar.toUpperCase()
-                  : pieceChar);
-        }
-      }
-      if (emptyCount > 0) {
-        fen += '$emptyCount';
-      }
-      if (r < 7) {
-        fen += '/';
-      }
-    }
-
-    // إضافة معلومات اللاعب الحالي وحقوق الكاستلينج وحركة الـ En Passant ونصف الحركة والرقم الكامل للحركة
-    fen += ' ${board.currentPlayer == PieceColor.white ? 'w' : 'b'}';
-
-    String castlingRightsStr = '';
-    if (board.castlingRights[PieceColor.white]![CastlingSide.kingSide]!) {
-      castlingRightsStr += 'K';
-    }
-    if (board.castlingRights[PieceColor.white]![CastlingSide.queenSide]!) {
-      castlingRightsStr += 'Q';
-    }
-    if (board.castlingRights[PieceColor.black]![CastlingSide.kingSide]!) {
-      castlingRightsStr += 'k';
-    }
-    if (board.castlingRights[PieceColor.black]![CastlingSide.queenSide]!) {
-      castlingRightsStr += 'q';
-    }
-    fen += ' ${castlingRightsStr.isEmpty ? '-' : castlingRightsStr}';
-
-    // تمثيل En Passant: يجب أن يكون بتنسيق العمود والصف (a3, e6)
-    // هنا نقوم بتمثيله كـ 'rowcol' مؤقتًا، يمكن تحسينه لاحقًا ليتوافق مع FEN القياسي.
-    fen +=
-        ' ${board.enPassantTarget == null ? '-' : String.fromCharCode(97 + board.enPassantTarget!.col) + (8 - board.enPassantTarget!.row).toString()}';
-    fen += ' ${board.halfMoveClock}';
-    fen += ' ${board.fullMoveNumber}';
-
-    return fen;
-  }
-
-  /// يتحقق مما إذا كانت حالة اللعبة هي تعادل بسبب المواد غير الكافية.
-  /// (الملك مقابل الملك، الملك والأسقف مقابل الملك، الملك والحصان مقابل الملك).
-  bool _isInsufficientMaterialDraw() {
-    List<Piece> allPieces = [];
-    for (var row in _currentBoard.squares) {
-      for (var piece in row) {
-        if (piece != null) {
-          allPieces.add(piece);
-        }
-      }
-    }
-
-    // الملك مقابل الملك
-    if (allPieces.length == 2 &&
-        allPieces.every((p) => p.type == PieceType.king)) {
-      return true;
-    }
-
-    // الملك والأسقف مقابل الملك
-    if (allPieces.length == 3 &&
-        allPieces.where((p) => p.type == PieceType.king).length == 2 &&
-        allPieces.any((p) => p.type == PieceType.bishop)) {
-      return true;
-    }
-
-    // الملك والحصان مقابل الملك
-    if (allPieces.length == 3 &&
-        allPieces.where((p) => p.type == PieceType.king).length == 2 &&
-        allPieces.any((p) => p.type == PieceType.knight)) {
-      return true;
-    }
-
-    // الملك والأسقف مقابل الملك والأسقف (على نفس لون المربعات)
-    // هذا الشرط أكثر تعقيدًا ويتطلب تحديد لون مربع الأسقف.
-    // لتبسيط، إذا كان هناك ملكان وأسقفان فقط، فهذا تعادل.
-    if (allPieces.length == 4 &&
-        allPieces.where((p) => p.type == PieceType.king).length == 2 &&
-        allPieces.where((p) => p.type == PieceType.bishop).length == 2) {
-      // للتحقق من أن الأساقفة على نفس لون المربعات، نحتاج إلى معرفة مواقعهم.
-      // هذا المثال لا يتتبع مواقع القطع في قائمة allPieces.
-      // سأفترض هنا أن وجود ملكين وأسقفين فقط يؤدي إلى التعادل بشكل عام.
-      return true;
-    }
-
-    // يمكن إضافة المزيد من حالات المواد غير الكافية هنا (مثل ملكين وحصانين).
-
-    return false;
-  }
-
-  ///
-  ///
-  ///
-  ///
-  ///
-  ///
-  ///
-  ///
-  ///
-  ///
 
   /// قاموس يمثل قيم القطع (لتقييم اللوحة).
   static const Map<PieceType, int> _pieceValues = {
@@ -1114,37 +975,76 @@ class GameRepositoryImpl implements GameRepository {
 
   /// نسخة من _isInsufficientMaterialDraw تعمل على لوحة محددة (للمحاكاة).
   bool _isInsufficientMaterialDrawForBoard(Board boardToSimulate) {
-    List<Piece> allPieces = [];
-    for (var row in boardToSimulate.squares) {
-      for (var piece in row) {
+    List<Piece?> allPieces = [];
+    List<Cell> bishopPositions = []; // لتتبع مواقع الأساقفة
+
+    for (int r = 0; r < 8; r++) {
+      for (int c = 0; c < 8; c++) {
+        final piece = boardToSimulate.squares[r][c];
         if (piece != null) {
           allPieces.add(piece);
+          if (piece.type == PieceType.bishop) {
+            bishopPositions.add(Cell(row: r, col: c));
+          }
         }
       }
     }
 
-    if (allPieces.length == 2 &&
-        allPieces.every((p) => p.type == PieceType.king)) {
+    // إزالة القطع null لتبسيط العد
+    final nonNullPieces = allPieces.whereNotNull().toList();
+
+    // الملك مقابل الملك (فقط ملكان على اللوحة)
+    if (nonNullPieces.length == 2 &&
+        nonNullPieces.every((p) => p.type == PieceType.king)) {
       return true;
     }
 
-    if (allPieces.length == 3 &&
-        allPieces.where((p) => p.type == PieceType.king).length == 2 &&
-        allPieces.any((p) => p.type == PieceType.bishop)) {
-      return true;
+    // الملك والأسقف مقابل الملك
+    // الملك والحصان مقابل الملك
+    if (nonNullPieces.length == 3) {
+      final kings =
+          nonNullPieces.where((p) => p.type == PieceType.king).toList();
+      final minorPieces =
+          nonNullPieces
+              .where(
+                (p) => p.type == PieceType.bishop || p.type == PieceType.knight,
+              )
+              .toList();
+
+      if (kings.length == 2 && minorPieces.length == 1) {
+        return true; // تعادل تلقائي إذا كان هناك ملكان وقطعة ثانوية واحدة فقط (أسقف أو حصان)
+      }
     }
 
-    if (allPieces.length == 3 &&
-        allPieces.where((p) => p.type == PieceType.king).length == 2 &&
-        allPieces.any((p) => p.type == PieceType.knight)) {
-      return true;
+    // الملك والأسقف مقابل الملك والأسقف (على نفس لون المربعات)
+    if (nonNullPieces.length == 4 &&
+        nonNullPieces.where((p) => p.type == PieceType.king).length == 2 &&
+        nonNullPieces.where((p) => p.type == PieceType.bishop).length == 2) {
+      // تحقق من أن كلا الأسقفين على نفس لون المربعات
+      if (bishopPositions.length == 2) {
+        final bishop1 =
+            boardToSimulate.getPieceAt(bishopPositions[0]) as Bishop;
+        final bishop2 =
+            boardToSimulate.getPieceAt(bishopPositions[1]) as Bishop;
+
+        // الأساقفة على نفس لون المربعات إذا كانت (كلاهما فاتح) أو (كلاهما داكن)
+        final bool areBothLight =
+            bishopPositions[0].isLightSquare() &&
+            bishopPositions[1].isLightSquare();
+        final bool areBothDark =
+            bishopPositions[0].isDarkSquare() &&
+            bishopPositions[1].isDarkSquare();
+
+        if (areBothLight || areBothDark) {
+          return true;
+        }
+      }
     }
 
-    if (allPieces.length == 4 &&
-        allPieces.where((p) => p.type == PieceType.king).length == 2 &&
-        allPieces.where((p) => p.type == PieceType.bishop).length == 2) {
-      return true;
-    }
+    // يمكن إضافة المزيد من حالات المواد غير الكافية هنا (مثل ملكين وحصانين).
+    // الملك وحصانين ضد الملك: عادة ما تكون تعادلًا، ولكن يمكن أن تكون فوزًا نادرًا
+    // لذا من الأفضل عدم تضمينها كتعادل تلقائي إلا إذا كان هناك تحليل أعمق.
+
     return false;
   }
 
@@ -1154,5 +1054,433 @@ class GameRepositoryImpl implements GameRepository {
     PieceColor playerColor,
   ) {
     return _getAllLegalMovesForBoard(boardToSimulate, playerColor).isNotEmpty;
+  }
+}
+
+extension CheckGameConditions on GameRepositoryImpl {
+  /// يتحقق مما إذا كانت اللوحة الحالية قد تكررت ثلاث مرات.
+  // bool _isThreefoldRepetition() {
+  //   if (_boardHistory.length < 5) {
+  //     return false; // تحتاج على الأقل 5 لوحات لتكرار ثلاثي (حركتان لكل لاعب + اللوحة الحالية)
+  //   }
+
+  //   final currentBoardFEN = _boardToFEN(currentBoard);
+  //   int count = 0;
+  //   for (int i = 0; i < _boardHistory.length; i++) {
+  //     if (_boardToFEN(_boardHistory[i]) == currentBoardFEN) {
+  //       count++;
+  //     }
+  //   }
+  //   return count >= 3;
+  // }
+
+  /// دالة مساعدة لتحويل حالة اللوحة إلى تمثيل FEN مبسط
+  /// يستخدم لمقارنة اللوحات لتحديد التكرار الثلاثي.
+  String _boardToFEN(Board board) {
+    String fen = '';
+    for (int r = 0; r < 8; r++) {
+      int emptyCount = 0;
+      for (int c = 0; c < 8; c++) {
+        final piece = board.squares[r][c];
+        if (piece == null) {
+          emptyCount++;
+        } else {
+          if (emptyCount > 0) {
+            fen += '$emptyCount';
+            emptyCount = 0;
+          }
+          String pieceChar = '';
+          switch (piece.type) {
+            case PieceType.pawn:
+              pieceChar = 'p';
+              break;
+            case PieceType.rook:
+              pieceChar = 'r';
+              break;
+            case PieceType.knight:
+              pieceChar = 'n';
+              break;
+            case PieceType.bishop:
+              pieceChar = 'b';
+              break;
+            case PieceType.queen:
+              pieceChar = 'q';
+              break;
+            case PieceType.king:
+              pieceChar = 'k';
+              break;
+          }
+          fen +=
+              (piece.color == PieceColor.white
+                  ? pieceChar.toUpperCase()
+                  : pieceChar);
+        }
+      }
+      if (emptyCount > 0) {
+        fen += '$emptyCount';
+      }
+      if (r < 7) {
+        fen += '/';
+      }
+    }
+
+    // إضافة معلومات اللاعب الحالي وحقوق الكاستلينج وحركة الـ En Passant ونصف الحركة والرقم الكامل للحركة
+    fen += ' ${board.currentPlayer == PieceColor.white ? 'w' : 'b'}';
+
+    String castlingRightsStr = '';
+    if (board.castlingRights[PieceColor.white]![CastlingSide.kingSide]!) {
+      castlingRightsStr += 'K';
+    }
+    if (board.castlingRights[PieceColor.white]![CastlingSide.queenSide]!) {
+      castlingRightsStr += 'Q';
+    }
+    if (board.castlingRights[PieceColor.black]![CastlingSide.kingSide]!) {
+      castlingRightsStr += 'k';
+    }
+    if (board.castlingRights[PieceColor.black]![CastlingSide.queenSide]!) {
+      castlingRightsStr += 'q';
+    }
+    fen += ' ${castlingRightsStr.isEmpty ? '-' : castlingRightsStr}';
+
+    // تمثيل En Passant: يجب أن يكون بتنسيق العمود والصف (a3, e6)
+    fen +=
+        ' ${board.enPassantTarget == null ? '-' : String.fromCharCode(97 + board.enPassantTarget!.col) + (8 - board.enPassantTarget!.row).toString()}';
+    fen +=
+        ' ${board.halfMoveClock}'; // قاعدة الخمسين حركة لا تُعاد تعيينها عند التكرار الثلاثي، ولكنها جزء من FEN
+    fen += ' ${board.fullMoveNumber}';
+
+    return fen;
+  }
+
+  // lib/data/repositories/game_repository_impl.dart
+
+  // دالة مساعدة لإنشاء "مفتاح موقف" (FEN بدون عدادات الحركة)
+  String _boardToPositionKey2(Board board) {
+    String fen = '';
+    for (int r = 0; r < 8; r++) {
+      int emptyCount = 0;
+      for (int c = 0; c < 8; c++) {
+        final piece = board.squares[r][c];
+        if (piece == null) {
+          emptyCount++;
+        } else {
+          if (emptyCount > 0) {
+            fen += '$emptyCount';
+            emptyCount = 0;
+          }
+          String pieceChar = '';
+          switch (piece.type) {
+            case PieceType.pawn:
+              pieceChar = 'p';
+              break;
+            case PieceType.rook:
+              pieceChar = 'r';
+              break;
+            case PieceType.knight:
+              pieceChar = 'n';
+              break;
+            case PieceType.bishop:
+              pieceChar = 'b';
+              break;
+            case PieceType.queen:
+              pieceChar = 'q';
+              break;
+            case PieceType.king:
+              pieceChar = 'k';
+              break;
+          }
+          fen +=
+              (piece.color == PieceColor.white
+                  ? pieceChar.toUpperCase()
+                  : pieceChar);
+        }
+      }
+      if (emptyCount > 0) {
+        fen += '$emptyCount';
+      }
+      if (r < 7) {
+        fen += '/';
+      }
+    }
+
+    fen += ' ${board.currentPlayer == PieceColor.white ? 'w' : 'b'}';
+
+    String castlingRightsStr = '';
+    if (board.castlingRights[PieceColor.white]![CastlingSide.kingSide]!) {
+      castlingRightsStr += 'K';
+    }
+    if (board.castlingRights[PieceColor.white]![CastlingSide.queenSide]!) {
+      castlingRightsStr += 'Q';
+    }
+    if (board.castlingRights[PieceColor.black]![CastlingSide.kingSide]!) {
+      castlingRightsStr += 'k';
+    }
+    if (board.castlingRights[PieceColor.black]![CastlingSide.queenSide]!) {
+      castlingRightsStr += 'q';
+    }
+    fen += ' ${castlingRightsStr.isEmpty ? '-' : castlingRightsStr}';
+
+    fen +=
+        ' ${board.enPassantTarget == null ? '-' : String.fromCharCode(97 + board.enPassantTarget!.col) + (8 - board.enPassantTarget!.row).toString()}';
+
+    return fen;
+  }
+
+  // lib/data/repositories/game_repository_impl.dart
+
+  // ... (الاستيرادات وبقية الكود) ...
+
+  /// دالة مساعدة لإنشاء "مفتاح موقف" (FEN بدون عدادات الحركة).
+  /// تُستخدم للتحقق من التكرار الثلاثي.
+  String _boardToPositionKey(Board board) {
+    String fen = '';
+    for (int r = 0; r < 8; r++) {
+      int emptyCount = 0;
+      for (int c = 0; c < 8; c++) {
+        final piece = board.squares[r][c];
+        if (piece == null) {
+          emptyCount++;
+        } else {
+          if (emptyCount > 0) {
+            fen += '$emptyCount';
+            emptyCount = 0;
+          }
+          String pieceChar = '';
+          switch (piece.type) {
+            case PieceType.pawn:
+              pieceChar = 'p';
+              break;
+            case PieceType.rook:
+              pieceChar = 'r';
+              break;
+            case PieceType.knight:
+              pieceChar = 'n';
+              break;
+            case PieceType.bishop:
+              pieceChar = 'b';
+              break;
+            case PieceType.queen:
+              pieceChar = 'q';
+              break;
+            case PieceType.king:
+              pieceChar = 'k';
+              break;
+          }
+          fen +=
+              (piece.color == PieceColor.white
+                  ? pieceChar.toUpperCase()
+                  : pieceChar);
+        }
+      }
+      if (emptyCount > 0) {
+        fen += '$emptyCount';
+      }
+      if (r < 7) {
+        fen += '/';
+      }
+    }
+
+    // إضافة معلومات اللاعب الحالي وحقوق الكاستلينج وحركة الـ En Passant
+    fen += ' ${board.currentPlayer == PieceColor.white ? 'w' : 'b'}';
+
+    String castlingRightsStr = '';
+    if (board.castlingRights[PieceColor.white]![CastlingSide.kingSide]!) {
+      castlingRightsStr += 'K';
+    }
+    if (board.castlingRights[PieceColor.white]![CastlingSide.queenSide]!) {
+      castlingRightsStr += 'Q';
+    }
+    if (board.castlingRights[PieceColor.black]![CastlingSide.kingSide]!) {
+      castlingRightsStr += 'k';
+    }
+    if (board.castlingRights[PieceColor.black]![CastlingSide.queenSide]!) {
+      castlingRightsStr += 'q';
+    }
+    fen += ' ${castlingRightsStr.isEmpty ? '-' : castlingRightsStr}';
+
+    fen +=
+        ' ${board.enPassantTarget == null ? '-' : String.fromCharCode(97 + board.enPassantTarget!.col) + (8 - board.enPassantTarget!.row).toString()}';
+
+    return fen;
+  }
+
+  /// يتحقق مما إذا كانت اللوحة الحالية قد تكررت ثلاث مرات.
+  bool _isThreefoldRepetition() {
+    if (_boardHistory.length < 5) {
+      return false; // تحتاج على الأقل 5 لوحات لتكرار ثلاثي (3 مواقف متطابقة على الأقل)
+    }
+
+    // استخدام _boardToPositionKey للحصول على مفتاح الموقف
+    final currentPositionKey = _boardToPositionKey(currentBoard);
+    int count = 0;
+
+    // ابحث في سجل اللوحات (باستخدام مفتاح الموقف فقط)
+    for (final boardInHistory in _boardHistory) {
+      if (_boardToPositionKey(boardInHistory) == currentPositionKey) {
+        count++;
+      }
+    }
+    // إذا كان العدد 3 أو أكثر، فإنها تعادل.
+    return count >= 4;
+  }
+
+  /// يتحقق مما إذا كانت اللوحة الحالية قد تكررت ثلاث مرات.
+  // bool _isThreefoldRepetition() {
+  //   if (_boardHistory.length < 5) return false; // تحتاج على الأقل 5 لوحات لتكرار ثلاثي (3 مواقف متطابقة على الأقل)
+
+  //   final currentPositionKey = _boardToPositionKey(currentBoard);
+  //   int count = 0;
+
+  //   // ابحث في سجل اللوحات (نبدأ من بداية السجل ونقارن مفتاح الموقف فقط)
+  //   for (final boardInHistory in _boardHistory) {
+  //     if (_boardToPositionKey(boardInHistory) == currentPositionKey) {
+  //       count++;
+  //     }
+  //   }
+  //   // إذا كان العدد 3 أو أكثر، فإنها تعادل.
+  //   return count >= 3;
+  // }
+  /// يتحقق مما إذا كانت حالة اللعبة هي تعادل بسبب المواد غير الكافية.
+  /// (الملك مقابل الملك، الملك والأسقف مقابل الملك، الملك والحصان مقابل الملك).
+  // lib/data/repositories/game_repository_impl.dart
+
+  // ... (الاستيرادات وبقية الكود) ...
+
+  /// يتحقق مما إذا كانت حالة اللعبة هي تعادل بسبب المواد غير الكافية.
+  bool _isInsufficientMaterialDraw() {
+    List<Piece> allPieces = [];
+    Map<Piece, Cell> piecePositions = {}; // لتخزين القطع ومواقعها
+
+    for (int r = 0; r < 8; r++) {
+      for (int c = 0; c < 8; c++) {
+        final piece = currentBoard.squares[r][c];
+        if (piece != null) {
+          allPieces.add(piece);
+          piecePositions[piece] = Cell(row: r, col: c);
+        }
+      }
+    }
+
+    // إذا كان هناك ملكان فقط
+    if (allPieces.length == 2 &&
+        allPieces.every((p) => p.type == PieceType.king)) {
+      return true; // ملك مقابل ملك
+    }
+
+    // الملك والأسقف مقابل الملك
+    if (allPieces.length == 3 &&
+        allPieces.where((p) => p.type == PieceType.king).length == 2 &&
+        allPieces.where((p) => p.type == PieceType.bishop).length == 1) {
+      return true;
+    }
+
+    // الملك والحصان مقابل الملك
+    if (allPieces.length == 3 &&
+        allPieces.where((p) => p.type == PieceType.king).length == 2 &&
+        allPieces.where((p) => p.type == PieceType.knight).length == 1) {
+      return true;
+    }
+
+    // الملك والأسقف مقابل الملك والأسقف (على نفس لون المربعات)
+    if (allPieces.length == 4 &&
+        allPieces.where((p) => p.type == PieceType.king).length == 2 &&
+        allPieces.where((p) => p.type == PieceType.bishop).length == 2) {
+      // الحصول على الأساقفة ومواقعهم
+      final List<Piece> bishops =
+          allPieces.where((p) => p.type == PieceType.bishop).toList();
+      final Cell? bishop1Cell = piecePositions[bishops[0]];
+      final Cell? bishop2Cell = piecePositions[bishops[1]];
+
+      if (bishop1Cell != null && bishop2Cell != null) {
+        // استخدام الامتداد CellColor للتحقق من لون المربع
+        final bool bishop1IsLight = bishop1Cell.isLightSquare();
+        final bool bishop2IsLight = bishop2Cell.isLightSquare();
+
+        // تعادل إذا كان كلا الأسقفين على نفس لون المربعات
+        return (bishop1IsLight && bishop2IsLight) ||
+            (!bishop1IsLight && !bishop2IsLight);
+      }
+    }
+
+    // يمكن إضافة المزيد من حالات المواد غير الكافية هنا إذا لزم الأمر
+    // مثال: ملك وحصانين مقابل ملك (غالباً ما تكون تعادل، لكن يمكن أن تكون فوزًا نادرًا)
+    // لا يتم تضمينها كتعادل تلقائي بشكل عام لأنها تتطلب تحليلاً أعمق.
+
+    return false;
+  }
+}
+
+class SimulateMove {
+  static Board simulateMove(Board board, Move move) {
+    Board simulatedBoard = board.copyWithDeepPieces();
+    final Piece? pieceToMove = simulatedBoard.getPieceAt(move.start);
+
+    if (pieceToMove == null) {
+      // هذا لا ينبغي أن يحدث إذا كانت الحركة قانونية
+      return simulatedBoard;
+    }
+
+    // لاحظ: هنا لا نغير hasMoved لأنها محاكاة فقط.
+    // يتم تغييرها في makeMove الفعلية.
+    // إذا كنت بحاجة لتغييرها للمحاكاة (مثلاً لفحص الكاستلينج في محاكاة)، ستحتاج لإنشاء نسخة من القطعة.
+    final Piece updatedPieceForSimulation =
+        pieceToMove.copyWith(); // لا تغير hasMoved هنا
+    simulatedBoard = simulatedBoard.placePiece(
+      move.end,
+      updatedPieceForSimulation,
+    );
+    simulatedBoard = simulatedBoard.placePiece(move.start, null);
+
+    // تحديث موقع الملك في اللوحة المحاكاة
+    if (pieceToMove.type == PieceType.king) {
+      final Map<PieceColor, Cell> newKingPositions = Map.from(
+        simulatedBoard.kingPositions,
+      );
+      newKingPositions[pieceToMove.color] = move.end;
+      simulatedBoard = simulatedBoard.copyWith(kingPositions: newKingPositions);
+    }
+
+    // معالجة En Passant في المحاكاة
+    if (move.isEnPassant) {
+      final int capturedPawnRow =
+          pieceToMove.color == PieceColor.white
+              ? move.end.row + 1
+              : move.end.row - 1;
+      final Cell capturedPawnCell = Cell(
+        row: capturedPawnRow,
+        col: move.end.col,
+      );
+      simulatedBoard = simulatedBoard.placePiece(capturedPawnCell, null);
+    }
+
+    // معالجة Castling في المحاكاة
+    if (move.isCastling && pieceToMove.type == PieceType.king) {
+      final int kingRow = pieceToMove.color == PieceColor.white ? 7 : 0;
+      if (move.end.col == 6) {
+        // King-side castling
+        final Cell oldRookCell = Cell(row: kingRow, col: 7);
+        final Cell newRookCell = Cell(row: kingRow, col: 5);
+        final Rook? rook = simulatedBoard.getPieceAt(oldRookCell) as Rook?;
+        if (rook != null) {
+          final Rook updatedRook =
+              rook.copyWith(); // لا تغير hasMoved هنا للمحاكاة
+          simulatedBoard = simulatedBoard.placePiece(newRookCell, updatedRook);
+          simulatedBoard = simulatedBoard.placePiece(oldRookCell, null);
+        }
+      } else if (move.end.col == 2) {
+        // Queen-side castling
+        final Cell oldRookCell = Cell(row: kingRow, col: 0);
+        final Cell newRookCell = Cell(row: kingRow, col: 3);
+        final Rook? rook = simulatedBoard.getPieceAt(oldRookCell) as Rook?;
+        if (rook != null) {
+          final Rook updatedRook =
+              rook.copyWith(); // لا تغير hasMoved هنا للمحاكاة
+          simulatedBoard = simulatedBoard.placePiece(newRookCell, updatedRook);
+          simulatedBoard = simulatedBoard.placePiece(oldRookCell, null);
+        }
+      }
+    }
+
+    return simulatedBoard;
   }
 }

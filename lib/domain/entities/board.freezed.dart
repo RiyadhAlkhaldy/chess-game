@@ -25,7 +25,10 @@ mixin _$Board {
 // castlingLefts, // Tracks castling rights for each player
  Cell? get enPassantTarget;// The cell where an en passant capture is possible
  int get halfMoveClock;// Number of half-moves since the last capture or pawn advance (for fifty-move rule)
- int get fullMoveNumber;
+ int get fullMoveNumber;// Number of full moves (increments after Black's move)
+// إضافة لسجل وضعيات اللوحة للتحقق من التكرار الثلاثي
+// A list of FEN strings or a similar unique board state representation
+ List<String> get positionHistory;
 /// Create a copy of Board
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -38,16 +41,16 @@ $BoardCopyWith<Board> get copyWith => _$BoardCopyWithImpl<Board>(this as Board, 
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Board&&const DeepCollectionEquality().equals(other.squares, squares)&&const DeepCollectionEquality().equals(other.moveHistory, moveHistory)&&(identical(other.currentPlayer, currentPlayer) || other.currentPlayer == currentPlayer)&&const DeepCollectionEquality().equals(other.kingPositions, kingPositions)&&const DeepCollectionEquality().equals(other.castlingRights, castlingRights)&&(identical(other.enPassantTarget, enPassantTarget) || other.enPassantTarget == enPassantTarget)&&(identical(other.halfMoveClock, halfMoveClock) || other.halfMoveClock == halfMoveClock)&&(identical(other.fullMoveNumber, fullMoveNumber) || other.fullMoveNumber == fullMoveNumber));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Board&&const DeepCollectionEquality().equals(other.squares, squares)&&const DeepCollectionEquality().equals(other.moveHistory, moveHistory)&&(identical(other.currentPlayer, currentPlayer) || other.currentPlayer == currentPlayer)&&const DeepCollectionEquality().equals(other.kingPositions, kingPositions)&&const DeepCollectionEquality().equals(other.castlingRights, castlingRights)&&(identical(other.enPassantTarget, enPassantTarget) || other.enPassantTarget == enPassantTarget)&&(identical(other.halfMoveClock, halfMoveClock) || other.halfMoveClock == halfMoveClock)&&(identical(other.fullMoveNumber, fullMoveNumber) || other.fullMoveNumber == fullMoveNumber)&&const DeepCollectionEquality().equals(other.positionHistory, positionHistory));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(squares),const DeepCollectionEquality().hash(moveHistory),currentPlayer,const DeepCollectionEquality().hash(kingPositions),const DeepCollectionEquality().hash(castlingRights),enPassantTarget,halfMoveClock,fullMoveNumber);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(squares),const DeepCollectionEquality().hash(moveHistory),currentPlayer,const DeepCollectionEquality().hash(kingPositions),const DeepCollectionEquality().hash(castlingRights),enPassantTarget,halfMoveClock,fullMoveNumber,const DeepCollectionEquality().hash(positionHistory));
 
 @override
 String toString() {
-  return 'Board(squares: $squares, moveHistory: $moveHistory, currentPlayer: $currentPlayer, kingPositions: $kingPositions, castlingRights: $castlingRights, enPassantTarget: $enPassantTarget, halfMoveClock: $halfMoveClock, fullMoveNumber: $fullMoveNumber)';
+  return 'Board(squares: $squares, moveHistory: $moveHistory, currentPlayer: $currentPlayer, kingPositions: $kingPositions, castlingRights: $castlingRights, enPassantTarget: $enPassantTarget, halfMoveClock: $halfMoveClock, fullMoveNumber: $fullMoveNumber, positionHistory: $positionHistory)';
 }
 
 
@@ -58,7 +61,7 @@ abstract mixin class $BoardCopyWith<$Res>  {
   factory $BoardCopyWith(Board value, $Res Function(Board) _then) = _$BoardCopyWithImpl;
 @useResult
 $Res call({
- List<List<Piece?>> squares, List<Move> moveHistory, PieceColor currentPlayer, Map<PieceColor, Cell> kingPositions, Map<PieceColor, Map<CastlingSide, bool>> castlingRights, Cell? enPassantTarget, int halfMoveClock, int fullMoveNumber
+ List<List<Piece?>> squares, List<Move> moveHistory, PieceColor currentPlayer, Map<PieceColor, Cell> kingPositions, Map<PieceColor, Map<CastlingSide, bool>> castlingRights, Cell? enPassantTarget, int halfMoveClock, int fullMoveNumber, List<String> positionHistory
 });
 
 
@@ -75,7 +78,7 @@ class _$BoardCopyWithImpl<$Res>
 
 /// Create a copy of Board
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? squares = null,Object? moveHistory = null,Object? currentPlayer = null,Object? kingPositions = null,Object? castlingRights = null,Object? enPassantTarget = freezed,Object? halfMoveClock = null,Object? fullMoveNumber = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? squares = null,Object? moveHistory = null,Object? currentPlayer = null,Object? kingPositions = null,Object? castlingRights = null,Object? enPassantTarget = freezed,Object? halfMoveClock = null,Object? fullMoveNumber = null,Object? positionHistory = null,}) {
   return _then(_self.copyWith(
 squares: null == squares ? _self.squares : squares // ignore: cast_nullable_to_non_nullable
 as List<List<Piece?>>,moveHistory: null == moveHistory ? _self.moveHistory : moveHistory // ignore: cast_nullable_to_non_nullable
@@ -85,7 +88,8 @@ as Map<PieceColor, Cell>,castlingRights: null == castlingRights ? _self.castling
 as Map<PieceColor, Map<CastlingSide, bool>>,enPassantTarget: freezed == enPassantTarget ? _self.enPassantTarget : enPassantTarget // ignore: cast_nullable_to_non_nullable
 as Cell?,halfMoveClock: null == halfMoveClock ? _self.halfMoveClock : halfMoveClock // ignore: cast_nullable_to_non_nullable
 as int,fullMoveNumber: null == fullMoveNumber ? _self.fullMoveNumber : fullMoveNumber // ignore: cast_nullable_to_non_nullable
-as int,
+as int,positionHistory: null == positionHistory ? _self.positionHistory : positionHistory // ignore: cast_nullable_to_non_nullable
+as List<String>,
   ));
 }
 /// Create a copy of Board
@@ -108,7 +112,7 @@ $CellCopyWith<$Res>? get enPassantTarget {
 @JsonSerializable()
 
 class _Board implements Board {
-  const _Board({required final  List<List<Piece?>> squares, final  List<Move> moveHistory = const [], this.currentPlayer = PieceColor.white, required final  Map<PieceColor, Cell> kingPositions, final  Map<PieceColor, Map<CastlingSide, bool>> castlingRights = const {PieceColor.white : {CastlingSide.kingSide : true, CastlingSide.queenSide : true}, PieceColor.black : {CastlingSide.kingSide : true, CastlingSide.queenSide : true}}, this.enPassantTarget, this.halfMoveClock = 0, this.fullMoveNumber = 1}): _squares = squares,_moveHistory = moveHistory,_kingPositions = kingPositions,_castlingRights = castlingRights;
+  const _Board({required final  List<List<Piece?>> squares, final  List<Move> moveHistory = const [], this.currentPlayer = PieceColor.white, required final  Map<PieceColor, Cell> kingPositions, final  Map<PieceColor, Map<CastlingSide, bool>> castlingRights = const {PieceColor.white : {CastlingSide.kingSide : true, CastlingSide.queenSide : true}, PieceColor.black : {CastlingSide.kingSide : true, CastlingSide.queenSide : true}}, this.enPassantTarget, this.halfMoveClock = 0, this.fullMoveNumber = 1, final  List<String> positionHistory = const []}): _squares = squares,_moveHistory = moveHistory,_kingPositions = kingPositions,_castlingRights = castlingRights,_positionHistory = positionHistory;
   factory _Board.fromJson(Map<String, dynamic> json) => _$BoardFromJson(json);
 
  final  List<List<Piece?>> _squares;
@@ -155,6 +159,19 @@ class _Board implements Board {
 @override@JsonKey() final  int halfMoveClock;
 // Number of half-moves since the last capture or pawn advance (for fifty-move rule)
 @override@JsonKey() final  int fullMoveNumber;
+// Number of full moves (increments after Black's move)
+// إضافة لسجل وضعيات اللوحة للتحقق من التكرار الثلاثي
+// A list of FEN strings or a similar unique board state representation
+ final  List<String> _positionHistory;
+// Number of full moves (increments after Black's move)
+// إضافة لسجل وضعيات اللوحة للتحقق من التكرار الثلاثي
+// A list of FEN strings or a similar unique board state representation
+@override@JsonKey() List<String> get positionHistory {
+  if (_positionHistory is EqualUnmodifiableListView) return _positionHistory;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_positionHistory);
+}
+
 
 /// Create a copy of Board
 /// with the given fields replaced by the non-null parameter values.
@@ -169,16 +186,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Board&&const DeepCollectionEquality().equals(other._squares, _squares)&&const DeepCollectionEquality().equals(other._moveHistory, _moveHistory)&&(identical(other.currentPlayer, currentPlayer) || other.currentPlayer == currentPlayer)&&const DeepCollectionEquality().equals(other._kingPositions, _kingPositions)&&const DeepCollectionEquality().equals(other._castlingRights, _castlingRights)&&(identical(other.enPassantTarget, enPassantTarget) || other.enPassantTarget == enPassantTarget)&&(identical(other.halfMoveClock, halfMoveClock) || other.halfMoveClock == halfMoveClock)&&(identical(other.fullMoveNumber, fullMoveNumber) || other.fullMoveNumber == fullMoveNumber));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Board&&const DeepCollectionEquality().equals(other._squares, _squares)&&const DeepCollectionEquality().equals(other._moveHistory, _moveHistory)&&(identical(other.currentPlayer, currentPlayer) || other.currentPlayer == currentPlayer)&&const DeepCollectionEquality().equals(other._kingPositions, _kingPositions)&&const DeepCollectionEquality().equals(other._castlingRights, _castlingRights)&&(identical(other.enPassantTarget, enPassantTarget) || other.enPassantTarget == enPassantTarget)&&(identical(other.halfMoveClock, halfMoveClock) || other.halfMoveClock == halfMoveClock)&&(identical(other.fullMoveNumber, fullMoveNumber) || other.fullMoveNumber == fullMoveNumber)&&const DeepCollectionEquality().equals(other._positionHistory, _positionHistory));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_squares),const DeepCollectionEquality().hash(_moveHistory),currentPlayer,const DeepCollectionEquality().hash(_kingPositions),const DeepCollectionEquality().hash(_castlingRights),enPassantTarget,halfMoveClock,fullMoveNumber);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_squares),const DeepCollectionEquality().hash(_moveHistory),currentPlayer,const DeepCollectionEquality().hash(_kingPositions),const DeepCollectionEquality().hash(_castlingRights),enPassantTarget,halfMoveClock,fullMoveNumber,const DeepCollectionEquality().hash(_positionHistory));
 
 @override
 String toString() {
-  return 'Board(squares: $squares, moveHistory: $moveHistory, currentPlayer: $currentPlayer, kingPositions: $kingPositions, castlingRights: $castlingRights, enPassantTarget: $enPassantTarget, halfMoveClock: $halfMoveClock, fullMoveNumber: $fullMoveNumber)';
+  return 'Board(squares: $squares, moveHistory: $moveHistory, currentPlayer: $currentPlayer, kingPositions: $kingPositions, castlingRights: $castlingRights, enPassantTarget: $enPassantTarget, halfMoveClock: $halfMoveClock, fullMoveNumber: $fullMoveNumber, positionHistory: $positionHistory)';
 }
 
 
@@ -189,7 +206,7 @@ abstract mixin class _$BoardCopyWith<$Res> implements $BoardCopyWith<$Res> {
   factory _$BoardCopyWith(_Board value, $Res Function(_Board) _then) = __$BoardCopyWithImpl;
 @override @useResult
 $Res call({
- List<List<Piece?>> squares, List<Move> moveHistory, PieceColor currentPlayer, Map<PieceColor, Cell> kingPositions, Map<PieceColor, Map<CastlingSide, bool>> castlingRights, Cell? enPassantTarget, int halfMoveClock, int fullMoveNumber
+ List<List<Piece?>> squares, List<Move> moveHistory, PieceColor currentPlayer, Map<PieceColor, Cell> kingPositions, Map<PieceColor, Map<CastlingSide, bool>> castlingRights, Cell? enPassantTarget, int halfMoveClock, int fullMoveNumber, List<String> positionHistory
 });
 
 
@@ -206,7 +223,7 @@ class __$BoardCopyWithImpl<$Res>
 
 /// Create a copy of Board
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? squares = null,Object? moveHistory = null,Object? currentPlayer = null,Object? kingPositions = null,Object? castlingRights = null,Object? enPassantTarget = freezed,Object? halfMoveClock = null,Object? fullMoveNumber = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? squares = null,Object? moveHistory = null,Object? currentPlayer = null,Object? kingPositions = null,Object? castlingRights = null,Object? enPassantTarget = freezed,Object? halfMoveClock = null,Object? fullMoveNumber = null,Object? positionHistory = null,}) {
   return _then(_Board(
 squares: null == squares ? _self._squares : squares // ignore: cast_nullable_to_non_nullable
 as List<List<Piece?>>,moveHistory: null == moveHistory ? _self._moveHistory : moveHistory // ignore: cast_nullable_to_non_nullable
@@ -216,7 +233,8 @@ as Map<PieceColor, Cell>,castlingRights: null == castlingRights ? _self._castlin
 as Map<PieceColor, Map<CastlingSide, bool>>,enPassantTarget: freezed == enPassantTarget ? _self.enPassantTarget : enPassantTarget // ignore: cast_nullable_to_non_nullable
 as Cell?,halfMoveClock: null == halfMoveClock ? _self.halfMoveClock : halfMoveClock // ignore: cast_nullable_to_non_nullable
 as int,fullMoveNumber: null == fullMoveNumber ? _self.fullMoveNumber : fullMoveNumber // ignore: cast_nullable_to_non_nullable
-as int,
+as int,positionHistory: null == positionHistory ? _self._positionHistory : positionHistory // ignore: cast_nullable_to_non_nullable
+as List<String>,
   ));
 }
 

@@ -187,8 +187,10 @@ abstract class King with _$King implements Piece {
       if (board.castlingRights[color]![CastlingSide.kingSide]! &&
           board.getPieceAt(Cell(row: kingRow, col: 5)) == null &&
           board.getPieceAt(Cell(row: kingRow, col: 6)) == null) {
-        if (!board.isCellUnderAttack(color, Cell(row: kingRow, col: 5)) &&
-            !board.isCellUnderAttack(color, Cell(row: kingRow, col: 6))) {
+        if (board.isCellUnderAttack(color, Cell(row: kingRow, col: 5)) ==
+                false &&
+            board.isCellUnderAttack(color, Cell(row: kingRow, col: 6)) ==
+                false) {
           moves.add(
             Move(
               start: currentCell,
@@ -204,8 +206,10 @@ abstract class King with _$King implements Piece {
           board.getPieceAt(Cell(row: kingRow, col: 3)) == null &&
           board.getPieceAt(Cell(row: kingRow, col: 2)) == null &&
           board.getPieceAt(Cell(row: kingRow, col: 1)) == null) {
-        if (!board.isCellUnderAttack(color, Cell(row: kingRow, col: 3)) &&
-            !board.isCellUnderAttack(color, Cell(row: kingRow, col: 2))) {
+        if (board.isCellUnderAttack(color, Cell(row: kingRow, col: 3)) ==
+                false &&
+            board.isCellUnderAttack(color, Cell(row: kingRow, col: 2)) ==
+                false) {
           moves.add(
             Move(
               start: currentCell,

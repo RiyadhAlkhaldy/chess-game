@@ -41,6 +41,9 @@ abstract class Board with _$Board {
     halfMoveClock, // Number of half-moves since the last capture or pawn advance (for fifty-move rule)
     @Default(1)
     int fullMoveNumber, // Number of full moves (increments after Black's move)
+    // إضافة لسجل وضعيات اللوحة للتحقق من التكرار الثلاثي
+    // A list of FEN strings or a similar unique board state representation
+    @Default([]) List<String> positionHistory,
   }) = _Board;
 
   /// Factory constructor to set up the initial state of a chess board.
@@ -117,11 +120,21 @@ abstract class Board with _$Board {
       PieceColor.white: const Cell(row: 7, col: 4),
       PieceColor.black: const Cell(row: 0, col: 4),
     };
-
+    // Initial FEN for the starting position - FEN الأولي للوضعية الافتتاحية
+    final initialFen = _boardToFen(
+      initialSquares,
+      PieceColor.white,
+      initialKingPositions,
+      const {},
+      null,
+      0,
+      1,
+    );
     return Board(
       squares: initialSquares,
       kingPositions: initialKingPositions,
       currentPlayer: PieceColor.white,
+      positionHistory: [initialFen], // Add initial position to history
     );
   }
 
@@ -148,6 +161,9 @@ extension OnBoard on Board {
     final newCastlingRights = castlingRights.map(
       (key, value) => MapEntry(key, Map<CastlingSide, bool>.from(value)),
     );
+    final newPositionHistory = List<String>.from([
+      toFenString(),
+    ]); // نسخ سجل الوضعيات
 
     return copyWith(
       squares: newSquares,
@@ -158,6 +174,7 @@ extension OnBoard on Board {
       enPassantTarget: enPassantTarget,
       fullMoveNumber: fullMoveNumber,
       halfMoveClock: halfMoveClock,
+      positionHistory: newPositionHistory, // استخدم النسخة العميقة
     );
   }
 
@@ -228,4 +245,160 @@ extension OnBoard on Board {
     }
     return false;
   }
+
+  /// يقوم بتحويل حالة اللوحة الحالية إلى تمثيل FEN جزئي
+  /// (فقط الجزء الضروري لتحديد التكرار الثلاثي).
+  String toFenString() {
+    String fen = '';
+    for (int r = 0; r < 8; r++) {
+      int emptyCount = 0;
+      for (int c = 0; c < 8; c++) {
+        final piece = squares[r][c];
+        if (piece == null) {
+          emptyCount++;
+        } else {
+          if (emptyCount > 0) {
+            fen += emptyCount.toString();
+            emptyCount = 0;
+          }
+          String pieceChar;
+          switch (piece.type) {
+            case PieceType.pawn:
+              pieceChar = 'p';
+              break;
+            case PieceType.rook:
+              pieceChar = 'r';
+              break;
+            case PieceType.knight:
+              pieceChar = 'n';
+              break;
+            case PieceType.bishop:
+              pieceChar = 'b';
+              break;
+            case PieceType.queen:
+              pieceChar = 'q';
+              break;
+            case PieceType.king:
+              pieceChar = 'k';
+              break;
+          }
+          fen +=
+              piece.color == PieceColor.white
+                  ? pieceChar.toUpperCase()
+                  : pieceChar;
+        }
+      }
+      if (emptyCount > 0) {
+        fen += emptyCount.toString();
+      }
+      if (r < 7) {
+        fen += '/';
+      }
+    }
+
+    // Current player - اللاعب الحالي
+    fen += ' ${currentPlayer == PieceColor.white ? 'w' : 'b'}';
+
+    // Castling rights - حقوق التبييت
+    String castlingFen = '';
+    if (castlingRights[PieceColor.white]![CastlingSide.kingSide]!) {
+      castlingFen += 'K';
+    }
+    if (castlingRights[PieceColor.white]![CastlingSide.queenSide]!) {
+      castlingFen += 'Q';
+    }
+    if (castlingRights[PieceColor.black]![CastlingSide.kingSide]!) {
+      castlingFen += 'k';
+    }
+    if (castlingRights[PieceColor.black]![CastlingSide.queenSide]!) {
+      castlingFen += 'q';
+    }
+    fen += ' ${castlingFen.isEmpty ? '-' : castlingFen}';
+
+    // En passant target square - مربع الأخذ بالمرور المستهدف
+    fen +=
+        ' ${enPassantTarget == null ? '-' : String.fromCharCode(97 + enPassantTarget!.col) + (8 - enPassantTarget!.row).toString()}';
+
+    // Halfmove clock - عداد أنصاف الحركات
+    fen += ' $halfMoveClock';
+
+    // Fullmove number - رقم الحركة الكاملة
+    fen += ' $fullMoveNumber';
+
+    return fen;
+  }
+}
+
+// دالة مساعدة لتحويل اللوحة إلى FEN (لاستخدامها في Board.initial)
+String _boardToFen(
+  List<List<Piece?>> squares,
+  PieceColor currentPlayer,
+  Map<PieceColor, Cell> kingPositions,
+  Map<PieceColor, Map<CastlingSide, bool>> castlingRights,
+  Cell? enPassantTarget,
+  int halfMoveClock,
+  int fullMoveNumber,
+) {
+  String fen = '';
+  for (int r = 0; r < 8; r++) {
+    int emptyCount = 0;
+    for (int c = 0; c < 8; c++) {
+      final piece = squares[r][c];
+      if (piece == null) {
+        emptyCount++;
+      } else {
+        if (emptyCount > 0) {
+          fen += emptyCount.toString();
+          emptyCount = 0;
+        }
+        String pieceChar;
+        switch (piece.type) {
+          case PieceType.pawn:
+            pieceChar = 'p';
+            break;
+          case PieceType.rook:
+            pieceChar = 'r';
+            break;
+          case PieceType.knight:
+            pieceChar = 'n';
+            break;
+          case PieceType.bishop:
+            pieceChar = 'b';
+            break;
+          case PieceType.queen:
+            pieceChar = 'q';
+            break;
+          case PieceType.king:
+            pieceChar = 'k';
+            break;
+        }
+        fen +=
+            piece.color == PieceColor.white
+                ? pieceChar.toUpperCase()
+                : pieceChar;
+      }
+    }
+    if (emptyCount > 0) {
+      fen += emptyCount.toString();
+    }
+    if (r < 7) {
+      fen += '/';
+    }
+  }
+
+  fen += ' ${currentPlayer == PieceColor.white ? 'w' : 'b'}';
+
+  String castlingFen = '';
+  // Since castlingRights is default for initial board, it will be empty map {}
+  // when passed to this helper unless explicitly defined. We need to handle this.
+  // For initial board, hardcode the full castling rights
+  castlingFen += 'KQkq'; // Assuming all castling rights are initially true
+  fen += ' ${castlingFen.isEmpty ? '-' : castlingFen}';
+
+  fen +=
+      ' ${enPassantTarget == null ? '-' : String.fromCharCode(97 + enPassantTarget.col) + (8 - enPassantTarget.row).toString()}';
+  fen += ' $halfMoveClock';
+  fen += ' $fullMoveNumber';
+
+  return fen;
 }

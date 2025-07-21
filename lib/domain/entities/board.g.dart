@@ -61,6 +61,11 @@ _Board _$BoardFromJson(Map<String, dynamic> json) => _Board(
           : Cell.fromJson(json['enPassantTarget'] as Map<String, dynamic>),
   halfMoveClock: (json['halfMoveClock'] as num?)?.toInt() ?? 0,
   fullMoveNumber: (json['fullMoveNumber'] as num?)?.toInt() ?? 1,
+  positionHistory:
+      (json['positionHistory'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList() ??
+      const [],
 );
 
 Map<String, dynamic> _$BoardToJson(_Board instance) => <String, dynamic>{
@@ -79,6 +84,7 @@ Map<String, dynamic> _$BoardToJson(_Board instance) => <String, dynamic>{
   'enPassantTarget': instance.enPassantTarget,
   'halfMoveClock': instance.halfMoveClock,
   'fullMoveNumber': instance.fullMoveNumber,
+  'positionHistory': instance.positionHistory,
 };
 
 const _$PieceColorEnumMap = {

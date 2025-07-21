@@ -48,7 +48,7 @@ abstract class GameRepository {
   bool hasAnyLegalMoves(PieceColor playerColor);
 
   /// التحقق من قواعد التعادل مثل قاعدة الخمسين حركة أو التكرار الثلاثي.
-  GameOutcome? checkForDrawConditions();
+  DrawReason? checkForDrawConditions();
 
   /// التحقق من حالة الكش ملك أو الطريق المسدود.
   GameResult checkGameEndConditions();
