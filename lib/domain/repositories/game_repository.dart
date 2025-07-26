@@ -42,16 +42,16 @@ abstract class GameRepository {
   bool isMoveResultingInCheck(Board board, Move move);
 
   /// الحصول على جميع الحركات القانونية للّاعب الحالي.
-  List<Move> getAllLegalMovesForCurrentPlayer();
+  List<Move> getAllLegalMovesForCurrentPlayer(Board baord);
 
   /// التحقق مما إذا كانت هناك أي حركات قانونية للّاعب الحالي.
   bool hasAnyLegalMoves(PieceColor playerColor);
 
   /// التحقق من قواعد التعادل مثل قاعدة الخمسين حركة أو التكرار الثلاثي.
-  DrawReason? checkForDrawConditions();
+  DrawReason? checkForDrawConditions(Board board);
 
   /// التحقق من حالة الكش ملك أو الطريق المسدود.
-  GameResult checkGameEndConditions();
+  GameResult checkGameEndConditions(Board board);
 
   /// الحصول على حركة مقترحة من الذكاء الاصطناعي.
   /// [board] هي اللوحة الحالية.

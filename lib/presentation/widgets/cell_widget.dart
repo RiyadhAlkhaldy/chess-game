@@ -13,7 +13,7 @@ class CellWidget extends StatelessWidget {
   final bool
   isLegalMoveTarget; // True if this cell is a legal move target for the selected piece
   final Widget? child; // The piece widget (if any) on this cell
-
+  final bool kingCellisOnCheck;
   const CellWidget({
     super.key,
     required this.cell,
@@ -21,6 +21,7 @@ class CellWidget extends StatelessWidget {
     this.isSelected = false,
     this.isLegalMoveTarget = false,
     this.child,
+    this.kingCellisOnCheck = false,
   });
 
   @override
@@ -38,6 +39,8 @@ class CellWidget extends StatelessWidget {
       // theme.colorScheme.secondary.withOpacity(
       //   0.5,
       // ); // Highlight for legal move targets
+    } else if (kingCellisOnCheck) {
+      backgroundColor = Colors.red.shade300; // لون أحمر لمربع الملك المهدد
     } else {
       backgroundColor =
           isWhite
@@ -46,6 +49,7 @@ class CellWidget extends StatelessWidget {
                   .shade200 // White squares background
               : Colors.brown.shade600; // Black squares background
     }
+
     return Container(
       decoration: BoxDecoration(
         color: backgroundColor,

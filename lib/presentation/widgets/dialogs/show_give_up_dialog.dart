@@ -22,7 +22,7 @@ Future<void> showGiveUpDialog({Function()? onPressedYesButton}) async {
                   () {
                     // Handle "Yes" logic
                     Get.back(); // Close dialog
-                    print('Game Given Up');
+                    debugPrint('Game Given Up');
                   },
               child: Text(
                 'Yes',

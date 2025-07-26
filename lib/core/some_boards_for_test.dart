@@ -359,4 +359,34 @@ class SomeBoardsForTest {
   ///
   ///
   static Board initial() => Board.initial();
+
+  ///
+  ///
+  /// test ai
+}
+
+class SomeBaordsForAITest {
+  static Board get statrtAIasBlack {
+    List<List<Piece?>> squares = Board.initial().copyWith().squares;
+
+    /// black knight
+    squares[2][2] = squares[0][1];
+    squares[2][5] = squares[0][6];
+    squares[0][1] = null;
+    squares[0][6] = null;
+
+    /// white pawns
+    squares[5][2] = squares[6][2];
+    squares[4][4] = squares[6][4];
+    squares[6][2] = null;
+    squares[6][4] = null;
+
+    /// white bishop
+    squares[4][2] = squares[7][5];
+    squares[7][5] = null;
+
+    return Board.initial()
+        .copyWith(squares: squares, currentPlayer: PieceColor.black)
+        .copyWithDeepPieces();
+  }
 }

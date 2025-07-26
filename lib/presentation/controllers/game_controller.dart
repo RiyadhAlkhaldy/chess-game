@@ -14,6 +14,7 @@ import '../../domain/usecases/get_game_result.dart';
 import '../../domain/usecases/get_legal_moves.dart';
 import '../../domain/usecases/is_king_in_check.dart';
 import '../../domain/usecases/make_move.dart';
+import '../../domain/usecases/play_sound_usecase.dart';
 import '../../domain/usecases/reset_game.dart';
 import 'get_options_controller.dart';
 
@@ -27,6 +28,7 @@ class GameController extends GetxController {
   final GetGameResult _getGameResult;
   final IsKingInCheck _isKingInCheck;
   final GetAiMove _getAiMove; // إضافة حالة استخدام الذكاء الاصطناعي
+  final PlaySoundUseCase _playSoundUseCase;
 
   /// حالة اللوحة الحالية التي يتم ملاحظتها بواسطة واجهة المستخدم.
   final Rx<Board> board = Board.initial().obs;
@@ -59,13 +61,15 @@ class GameController extends GetxController {
     required GetGameResult getGameResult,
     required IsKingInCheck isKingInCheck,
     required GetAiMove getAiMove, // حقن حالة استخدام الذكاء الاصطناعي
+    required PlaySoundUseCase playSoundUseCase,
   }) : _getBoardState = getBoardState,
        _getLegalMoves = getLegalMoves,
        _makeMove = makeMove,
        _resetGame = resetGame,
        _getGameResult = getGameResult,
        _isKingInCheck = isKingInCheck,
-       _getAiMove = getAiMove;
+       _getAiMove = getAiMove,
+       _playSoundUseCase = playSoundUseCase;
 
   @override
   void onInit() {
@@ -73,22 +77,22 @@ class GameController extends GetxController {
 
     _initialColorsAndAIdepth();
     // مراقبة تغيير اللاعب الحالي لتشغيل دور الذكاء الاصطناعي.
-    // ever(board, (_) {
-    _checkGameStatus();
-    // _handleAiTurn();
-    // });
+    ever(board, (_) {
+      _checkGameStatus();
+      _handleAiTurn();
+    });
     _updateBoardState();
   }
 
   /// initial colors for player and AI
   _initialColorsAndAIdepth() {
     /// ai depth
-    aiDepth = gameOptionsController.aiDepth.value;
+    aiDepth = gameOptionsController.aiDepth.value.toInt();
 
     /// human color
     final humanColor = gameOptionsController.meColor.value;
 
-    print("gameOptionsController 11 ${gameOptionsController.aiDepth}");
+    debugPrint("gameOptionsController 11 ${gameOptionsController.aiDepth}");
     humanPlayerColor = humanColor;
     aiPlayerColor =
         humanColor == PieceColor.white ? PieceColor.black : PieceColor.white;
@@ -147,16 +151,17 @@ class GameController extends GetxController {
   }
 
   /// يحاول تنفيذ حركة من الخلية [startCell] إلى الخلية [endCell].
-  void _tryMove(Cell startCell, Cell endCell) {
+  void _tryMove(Cell startCell, Cell endCell) async {
     final move = legalMoves.firstWhereOrNull(
       (m) => m.start == startCell && m.end == endCell,
     );
 
     if (move != null) {
       _makeMove.execute(move);
+      _playSoundUseCase.executeMoveSound();
+
       _updateBoardState();
       _clearSelection();
-      // _handleAiTurn();
     } else {
       debugPrint('الحركة غير قانونية!');
       _clearSelection();
@@ -170,12 +175,13 @@ class GameController extends GetxController {
   }
 
   /// إعادة تعيين اللعبة إلى حالتها الأولية.
-  void resetGame() {
+  void resetGame() async {
     _resetGame.execute();
     _initialColorsAndAIdepth();
     _updateBoardState();
     _checkGameStatus();
     _clearSelection();
+    _playSoundUseCase.executeMoveSound();
   }
 
   /// التحقق مما إذا كان الملك الحالي في حالة كش.
@@ -191,7 +197,7 @@ class GameController extends GetxController {
         'دور الذكاء الاصطناعي (${aiPlayerColor == PieceColor.white ? 'الأبيض' : 'الأسود'})',
       );
       await Future.delayed(
-        const Duration(milliseconds: 100),
+        const Duration(milliseconds: 300),
       ); // تأخير بسيط لمحاكاة التفكير
 
       final aiMove = await _getAiMove.execute(

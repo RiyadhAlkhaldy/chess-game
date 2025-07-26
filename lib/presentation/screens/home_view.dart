@@ -2,7 +2,6 @@ import 'package:chess_vectors_flutter/chess_vectors_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../controllers/music_controller.dart';
 import '../widgets/animated_background.dart';
 
 class HomeView extends StatelessWidget {
@@ -10,7 +9,6 @@ class HomeView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Get.put(MusicController()); // لتشغيل الموسيقى تلقائياً
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(

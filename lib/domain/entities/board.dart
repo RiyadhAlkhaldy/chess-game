@@ -165,7 +165,7 @@ extension OnBoard on Board {
       toFenString(),
     ]); // نسخ سجل الوضعيات
 
-    return copyWith(
+    return Board(
       squares: newSquares,
       moveHistory: newMoveHistory, // استخدم النسخة العميقة
       kingPositions: newKingPositions, // استخدم النسخة العميقة

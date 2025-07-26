@@ -58,7 +58,13 @@ class GameBoardWidget extends StatelessWidget {
               final isLegalMoveTarget = legalMoves.any(
                 (move) => move.end == cell,
               );
-
+              // لون مربع الملك إذا كان في كش
+              bool kingCellisOnCheck = false;
+              if (piece is King && controller.isCurrentKingInCheck()) {
+                if (piece.color == controller.board.value.currentPlayer) {
+                  kingCellisOnCheck = true;
+                }
+              }
               return DragTarget<PieceWidget>(
                 // Defines what kind of data this DragTarget can accept. Here, it's a PieceWidget.
                 // onWillAcceptWithDetails: (details) {
@@ -94,6 +100,7 @@ class GameBoardWidget extends StatelessWidget {
                       isWhite: (row + col) % 2 == 0, // Determine cell color
                       isSelected: isSelected,
                       isLegalMoveTarget: isLegalMoveTarget,
+                      kingCellisOnCheck: kingCellisOnCheck,
                       child:
                           piece != null
                               ? Transform.rotate(

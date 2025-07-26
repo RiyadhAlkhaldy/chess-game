@@ -1,10 +1,13 @@
 // lib/presentation/bindings/game_binding.dart
+import 'package:chess_gemini_2/domain/usecases/play_sound_usecase.dart';
 import 'package:get/get.dart';
 
 import '../../data/ai_engine.dart';
 import '../../data/local_storage_service.dart';
+import '../../domain/repositories/audio_player_service_impl.dart';
 import '../../domain/repositories/game_repository.dart';
 import '../../domain/repositories/game_repository_impl.dart';
+import '../../domain/services/audio_service.dart';
 import '../../domain/usecases/get_ai_move.dart';
 import '../../domain/usecases/get_board_state.dart';
 import '../../domain/usecases/get_game_result.dart';
@@ -70,6 +73,15 @@ class GameBinding extends Bindings {
       () => GetAiMove(Get.find<GameRepository>()),
       fenix: true, // Make this controller singleton
     ); // تسجيل جديد
+    Get.lazyPut<AudioPlayerService>(
+      () => AudioPlayerServiceImpl(),
+      fenix: true, // Make this controller singleton
+    ); // تسجيل جديد
+    Get.lazyPut(
+      () => PlaySoundUseCase(Get.find<AudioPlayerService>()),
+      fenix: true, // Make this controller singleton
+    ); // تسجيل جديد
+ 
     // تسجيل المتحكم (Controller)
     Get.lazyPut<GameController>(
       () => GameController(
@@ -80,6 +92,7 @@ class GameBinding extends Bindings {
         getGameResult: Get.find<GetGameResult>(),
         isKingInCheck: Get.find<IsKingInCheck>(),
         getAiMove: Get.find<GetAiMove>(),
+        playSoundUseCase: Get.find<PlaySoundUseCase>(),
       ),
       fenix: true, // Make this controller singleton
     );

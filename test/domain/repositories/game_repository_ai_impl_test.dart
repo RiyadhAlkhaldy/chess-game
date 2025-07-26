@@ -9,69 +9,39 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('group game_repository_impl', () {
+  group('group AI game_repository_impl', () {
     late GameRepositoryImpl gameRepositoryImpl;
     setUp(() {
-      // gameRepositoryImpl = Get.find<GameRepository>();
       gameRepositoryImpl = GameRepositoryImpl();
     });
-    test('test legal moves for white Pwan ', () async {
-      final response = gameRepositoryImpl.getLegalMoves(Cell(row: 6, col: 1));
-      debugPrint(gameRepositoryImpl.currentBoard.positionHistory.toString());
-      debugPrint(response.toString());
-    });
-    test('test en passant moves for Pwan ', () async {
-      debugPrint(gameRepositoryImpl.currentBoard.positionHistory.toString());
-
-      gameRepositoryImpl.makeMove(
-        Move(start: Cell(row: 6, col: 0), end: Cell(row: 4, col: 0)),
-      );
-      debugPrint(gameRepositoryImpl.currentBoard.positionHistory.toString());
-
-      ///
-
-      gameRepositoryImpl.makeMove(
-        Move(start: Cell(row: 1, col: 2), end: Cell(row: 3, col: 2)),
-      );
-      debugPrint(gameRepositoryImpl.currentBoard.positionHistory.toString());
-
-      ///
-      gameRepositoryImpl.makeMove(
-        Move(start: Cell(row: 4, col: 0), end: Cell(row: 3, col: 0)),
-      );
-      debugPrint(gameRepositoryImpl.currentBoard.positionHistory.toString());
-
-      ///
-
-      gameRepositoryImpl.makeMove(
-        Move(start: Cell(row: 1, col: 1), end: Cell(row: 3, col: 1)),
-      );
-      debugPrint(gameRepositoryImpl.currentBoard.positionHistory.toString());
-    });
+    // test('test legal moves for white Pwan ', () async {
+    //   final response = gameRepositoryImpl.getLegalMoves(Cell(row: 6, col: 1));
+    //   debugPrint(response.toString());
+    // });
 
     ///
     ///
 
     test('test legal moves for black knight', () async {
-      debugPrint(gameRepositoryImpl.currentBoard.positionHistory.toString());
-
-      gameRepositoryImpl.makeMove(
-        Move(start: Cell(row: 7, col: 1), end: Cell(row: 5, col: 2)),
-      );
+      gameRepositoryImpl.currentBoard = SomeBaordsForAITest.statrtAIasBlack;
       debugPrint(gameRepositoryImpl.currentBoard.positionHistory.toString());
       debugPrint('\n new \n');
 
-      final board = gameRepositoryImpl.makeMove(
-        Move(start: Cell(row: 6, col: 1), end: Cell(row: 5, col: 1)),
+      final move = await gameRepositoryImpl.getAiMove(
+        gameRepositoryImpl.currentBoard,
+        gameRepositoryImpl.currentBoard.currentPlayer,
+        5,
       );
+      // debugPrint(gameRepositoryImpl.currentBoard.positionHistory.toString());
+      // debugPrint('\n new \n');
+      debugPrint(gameRepositoryImpl.getGameResult().toString());
 
+      gameRepositoryImpl.makeMove(move!);
+      debugPrint(gameRepositoryImpl.currentBoard.positionHistory.toString());
       debugPrint('\n new \n');
 
-      debugPrint(board.positionHistory.toString());
-      debugPrint('\n new \n');
-
-      final response = gameRepositoryImpl.getLegalMoves(Cell(row: 0, col: 1));
-      debugPrint(response.toString());
+      // final response = gameRepositoryImpl.getLegalMoves(Cell(row: 0, col: 1));
+      // debugPrint(response.toString());
     });
 
     test('test get game result king vs king', () async {

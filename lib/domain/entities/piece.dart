@@ -191,13 +191,13 @@ abstract class King with _$King implements Piece {
                 false &&
             board.isCellUnderAttack(color, Cell(row: kingRow, col: 6)) ==
                 false) {
-          moves.add(
-            Move(
-              start: currentCell,
-              end: Cell(row: kingRow, col: 6),
-              isCastling: true,
-            ),
-          );
+        moves.add(
+          Move(
+            start: currentCell,
+            end: Cell(row: kingRow, col: 6),
+            isCastling: true,
+          ),
+        );
         }
       }
       // Queen-side castling
@@ -210,13 +210,13 @@ abstract class King with _$King implements Piece {
                 false &&
             board.isCellUnderAttack(color, Cell(row: kingRow, col: 2)) ==
                 false) {
-          moves.add(
-            Move(
-              start: currentCell,
-              end: Cell(row: kingRow, col: 2),
-              isCastling: true,
-            ),
-          );
+        moves.add(
+          Move(
+            start: currentCell,
+            end: Cell(row: kingRow, col: 2),
+            isCastling: true,
+          ),
+        );
         }
       }
     }

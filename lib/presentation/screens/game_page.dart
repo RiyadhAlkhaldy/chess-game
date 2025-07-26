@@ -177,8 +177,6 @@ class GamePage extends StatelessWidget {
         return piece.color == PieceColor.white ? '♘' : '♞';
       case PieceType.pawn:
         return piece.color == PieceColor.white ? '♙' : '♟';
-      default:
-        return '';
     }
   }
 }
