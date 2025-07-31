@@ -2,9 +2,19 @@
 
 import '../entities/board.dart';
 import '../entities/cell.dart';
+import '../entities/game_result.dart';
 import '../entities/move.dart';
 import '../entities/piece.dart';
-import '../entities/game_result.dart';
+
+/// [AIGameRepository]
+/// واجهة مجردة لتحديد عمليات البحث عن حركة الذكاء الاصطناعي.
+/// Abstract interface to define AI move search operations.
+abstract class AIGameRepository {
+  /// [findBestMove]
+  /// تبحث عن أفضل حركة للوحة المعطاة وعمق البحث.
+  /// Finds the best move for the given board and search depth.
+  Future<Move?> findBestMove(Board board, int depth);
+}
 
 /// واجهة توفر طرق التفاعل مع منطق لعبة الشطرنج.
 /// هذه الواجهة تحدد العمليات التي يمكن أن يقوم بها نظام إدارة اللعبة.
@@ -57,5 +67,10 @@ abstract class GameRepository {
   /// [board] هي اللوحة الحالية.
   /// [aiPlayerColor] هو لون اللاعب الذي يلعب به الذكاء الاصطناعي.
   /// تعيد [Move] المقترحة.
-  Future<Move?> getAiMove(Board board, PieceColor aiPlayerColor,int aiDepth);
+  Future<Move?> getAiMove(Board board, PieceColor aiPlayerColor, int aiDepth);
+
+  /// [findBestMove]
+  /// تبحث عن أفضل حركة للوحة المعطاة وعمق البحث.
+  /// Finds the best move for the given board and search depth.
+  Future<Move?> findBestMove(Board board, int depth);
 }

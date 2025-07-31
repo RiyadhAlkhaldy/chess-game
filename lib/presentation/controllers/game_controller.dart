@@ -8,7 +8,7 @@ import '../../domain/entities/cell.dart';
 import '../../domain/entities/game_result.dart';
 import '../../domain/entities/move.dart';
 import '../../domain/entities/piece.dart';
-import '../../domain/usecases/get_ai_move.dart'; // استيراد حالة استخدام الذكاء الاصطناعي
+import '../../domain/usecases/get_ai_move.dart';
 import '../../domain/usecases/get_board_state.dart';
 import '../../domain/usecases/get_game_result.dart';
 import '../../domain/usecases/get_legal_moves.dart';
@@ -27,7 +27,7 @@ class GameController extends GetxController {
   final ResetGame _resetGame;
   final GetGameResult _getGameResult;
   final IsKingInCheck _isKingInCheck;
-  final GetAiMove _getAiMove; // إضافة حالة استخدام الذكاء الاصطناعي
+  final GetAiMove _getAIMoveUseCase; // تم استبدال GetAiMove بـ GetAIMoveUseCase
   final PlaySoundUseCase _playSoundUseCase;
 
   /// حالة اللوحة الحالية التي يتم ملاحظتها بواسطة واجهة المستخدم.
@@ -52,6 +52,15 @@ class GameController extends GetxController {
   final gameOptionsController = Get.find<GameOptionsController>();
   int aiDepth = 3;
 
+  /// لتعقب حالة تحميل حركة الذكاء الاصطناعي
+  RxBool isLoadingAIMove = false.obs;
+
+  /// يشير إلى ما إذا كان أحد اللاعبين قد اقترح التعادل.
+  final RxBool drawOffered = false.obs;
+
+  /// لون اللاعب الذي قدم عرض التعادل.
+  final Rx<PieceColor?> playerOfferedDraw = Rx<PieceColor?>(null);
+
   /// مُنشئ المتحكم. يتم حقن الـ Use Cases هنا.
   GameController({
     required GetBoardState getBoardState,
@@ -60,7 +69,7 @@ class GameController extends GetxController {
     required ResetGame resetGame,
     required GetGameResult getGameResult,
     required IsKingInCheck isKingInCheck,
-    required GetAiMove getAiMove, // حقن حالة استخدام الذكاء الاصطناعي
+    required GetAiMove getAIMoveUseCase, // حقن حالة استخدام الذكاء الاصطناعي
     required PlaySoundUseCase playSoundUseCase,
   }) : _getBoardState = getBoardState,
        _getLegalMoves = getLegalMoves,
@@ -68,7 +77,7 @@ class GameController extends GetxController {
        _resetGame = resetGame,
        _getGameResult = getGameResult,
        _isKingInCheck = isKingInCheck,
-       _getAiMove = getAiMove,
+       _getAIMoveUseCase = getAIMoveUseCase,
        _playSoundUseCase = playSoundUseCase;
 
   @override
@@ -84,12 +93,16 @@ class GameController extends GetxController {
     _updateBoardState();
   }
 
-  /// initial colors for player and AI
+  /// [initialColorsAndAIdepth]
+  /// تهيئة الألوان للاعب والذكاء الاصطناعي وعمق بحث الذكاء الاصطناعي.
+  /// Initializes colors for player and AI and AI search depth.
   _initialColorsAndAIdepth() {
-    /// ai depth
+    /// عمق الذكاء الاصطناعي
+    /// AI depth
     aiDepth = gameOptionsController.aiDepth.value.toInt();
 
-    /// human color
+    /// لون اللاعب البشري
+    /// Human player color
     final humanColor = gameOptionsController.meColor.value;
 
     debugPrint("gameOptionsController 11 ${gameOptionsController.aiDepth}");
@@ -98,27 +111,35 @@ class GameController extends GetxController {
         humanColor == PieceColor.white ? PieceColor.black : PieceColor.white;
   }
 
+  /// [updateBoardState]
   /// تحديث حالة اللوحة من الـ Repository وتحديث [board].
+  /// Updates the board state from the Repository and updates [board].
   void _updateBoardState() {
     board.value = _getBoardState.execute();
   }
 
+  /// [checkGameStatus]
   /// يتحقق من حالة نهاية اللعبة (كش ملك، طريق مسدود، تعادل) ويحدث [gameResult].
+  /// Checks for game end conditions (checkmate, stalemate, draw) and updates [gameResult].
   void _checkGameStatus() {
     gameResult.value = _getGameResult.execute();
   }
 
+  /// [onCellTap]
   /// يعالج النقر على خلية في لوحة الشطرنج.
   /// يحدد ما إذا كانت القطعة قد تم اختيارها، أو يتم تحديد حركة، أو إلغاء التحديد.
+  /// Handles cell taps on the chessboard.
+  /// Determines whether a piece is selected, a move is being made, or a selection is cleared.
   void onCellTap(Cell cell) {
     if (gameResult.value.outcome != GameOutcome.playing) {
       return; // لا تسمح بالحركات إذا انتهت اللعبة
     }
 
     // السماح بالحركة فقط إذا كان الدور للاعب البشري.
+    // Allow moves only if it's the human player's turn.
     if (board.value.currentPlayer != humanPlayerColor) {
       debugPrint('ليس دورك يا لاعب! انتظر الذكاء الاصطناعي.');
-      // return;
+      return; // منع اللاعب من اللعب في دور الذكاء الاصطناعي
     }
 
     final Piece? pieceAtCell = board.value.getPieceAt(cell);
@@ -127,30 +148,38 @@ class GameController extends GetxController {
 
     if (selectedCell.value == null) {
       // لم يتم تحديد أي قطعة بعد.
+      // No piece selected yet.
       if (pieceAtCell != null &&
           pieceAtCell.color == board.value.currentPlayer) {
         // تم تحديد قطعة اللاعب الحالي.
+        // Current player's piece selected.
         selectedCell.value = cell;
         legalMoves.value = _getLegalMoves.execute(cell);
       }
     } else {
       // توجد قطعة محددة بالفعل.
+      // A piece is already selected.
       if (selectedCell.value == cell) {
         // تم النقر على نفس الخلية مرة أخرى، إلغاء التحديد.
+        // Tapped on the same cell again, deselect.
         _clearSelection();
       } else if (pieceAtCell != null &&
           pieceAtCell.color == board.value.currentPlayer) {
         // تم تحديد قطعة أخرى للّاعب الحالي.
+        // Another piece of the current player is selected.
         selectedCell.value = cell;
         legalMoves.value = _getLegalMoves.execute(cell);
       } else {
         // محاولة التحرك إلى خلية أخرى (أو أسر قطعة الخصم).
+        // Attempt to move to another cell (or capture opponent's piece).
         _tryMove(selectedCell.value!, cell);
       }
     }
   }
 
+  /// [tryMove]
   /// يحاول تنفيذ حركة من الخلية [startCell] إلى الخلية [endCell].
+  /// Tries to execute a move from [startCell] to [endCell].
   void _tryMove(Cell startCell, Cell endCell) async {
     final move = legalMoves.firstWhereOrNull(
       (m) => m.start == startCell && m.end == endCell,
@@ -168,31 +197,42 @@ class GameController extends GetxController {
     }
   }
 
+  /// [clearSelection]
   /// يمسح اختيار الخلية والحركات القانونية.
+  /// Clears cell selection and legal moves.
   void _clearSelection() {
     selectedCell.value = null;
     legalMoves.clear();
   }
 
+  /// [resetGame]
   /// إعادة تعيين اللعبة إلى حالتها الأولية.
+  /// Resets the game to its initial state.
   void resetGame() async {
     _resetGame.execute();
     _initialColorsAndAIdepth();
     _updateBoardState();
     _checkGameStatus();
     _clearSelection();
+    drawOffered.value = false; // إعادة تعيين حالة عرض التعادل
+    playerOfferedDraw.value = null;
     _playSoundUseCase.executeMoveSound();
   }
 
+  /// [isCurrentKingInCheck]
   /// التحقق مما إذا كان الملك الحالي في حالة كش.
+  /// Checks if the current king is in check.
   bool isCurrentKingInCheck() {
     return _isKingInCheck.execute(board.value.currentPlayer);
   }
 
+  /// [handleAiTurn]
   /// يتعامل مع دور الذكاء الاصطناعي.
+  /// Handles the AI's turn.
   Future<void> _handleAiTurn() async {
     if (board.value.currentPlayer == aiPlayerColor &&
         gameResult.value.outcome == GameOutcome.playing) {
+      isLoadingAIMove.value = true; // بدء مؤشر التحميل
       debugPrint(
         'دور الذكاء الاصطناعي (${aiPlayerColor == PieceColor.white ? 'الأبيض' : 'الأسود'})',
       );
@@ -200,24 +240,78 @@ class GameController extends GetxController {
         const Duration(milliseconds: 300),
       ); // تأخير بسيط لمحاكاة التفكير
 
-      final aiMove = await _getAiMove.execute(
-        board.value,
-        aiPlayerColor,
-        aiDepth,
-      );
-
-      if (aiMove != null) {
-        debugPrint(
-          'الذكاء الاصطناعي يقوم بالحركة: ${aiMove.start} -> ${aiMove.end}',
+      try {
+        // استدعاء حالة استخدام الذكاء الاصطناعي لحساب أفضل حركة.
+        // Passing the current board state and the search depth.
+        // The AI logic itself will determine whose turn it is from board.value.currentPlayer.
+        final aiMove = await _getAIMoveUseCase.execute(
+          board.value,
+          aiPlayerColor,
+          aiDepth,
         );
-        _makeMove.execute(aiMove);
-        _updateBoardState();
-      } else {
-        debugPrint(
-          'الذكاء الاصطناعي ليس لديه حركات قانونية. (طريق مسدود أو كش ملك)',
-        );
-        _checkGameStatus(); // تحقق من حالة اللعبة النهائية
+        debugPrint("aiMove = $aiMove");
+        if (aiMove != null) {
+          debugPrint(
+            'الذكاء الاصطناعي يقوم بالحركة: ${aiMove.start} -> ${aiMove.end}',
+          );
+          _makeMove.execute(aiMove); // تنفيذ حركة الذكاء الاصطناعي
+          _updateBoardState(); // تحديث حالة اللوحة بعد حركة الذكاء الاصطناعي
+        } else {
+          debugPrint(
+            'الذكاء الاصطناعي ليس لديه حركات قانونية. (طريق مسدود أو كش ملك)',
+          );
+          _checkGameStatus(); // تحقق من حالة اللعبة النهائية
+        }
+      } catch (e) {
+        debugPrint('خطأ في حساب حركة الذكاء الاصطناعي: $e');
+        // يمكن عرض رسالة خطأ للمستخدم هنا
+      } finally {
+        isLoadingAIMove.value = false; // إنهاء مؤشر التحميل
       }
+    }
+  }
+
+  /// يقترح التعادل.
+  void offerDraw() {
+    if (gameResult.value.outcome == GameOutcome.playing) {
+      drawOffered.value = true;
+      playerOfferedDraw.value = board.value.currentPlayer;
+      Get.snackbar(
+        'عرض تعادل!',
+        '${board.value.currentPlayer == PieceColor.white ? 'اللاعب الأبيض' : 'اللاعب الأسود'} يقترح التعادل.',
+        snackPosition: SnackPosition.BOTTOM,
+        mainButton: TextButton(
+          onPressed: () {
+            acceptDraw();
+            Get.back(); // إغلاق الـ Snackbar
+          },
+          child: const Text('قبول'),
+        ),
+        duration: const Duration(seconds: 10), // إعطاء اللاعب الآخر وقتًا للرد
+        onTap: (snack) {
+          // إذا تم النقر على أي مكان آخر، يتم رفض العرض
+          declineDraw();
+        },
+      );
+    }
+  }
+
+  /// يقبل عرض التعادل.
+  void acceptDraw() {
+    if (drawOffered.value) {
+      gameResult.value = GameResult.draw(DrawReason.agreement);
+      drawOffered.value = false;
+      playerOfferedDraw.value = null;
+      Get.snackbar('تعادل!', 'تم قبول عرض التعادل. اللعبة انتهت.');
+    }
+  }
+
+  /// يرفض عرض التعادل.
+  void declineDraw() {
+    if (drawOffered.value) {
+      drawOffered.value = false;
+      playerOfferedDraw.value = null;
+      Get.snackbar('تم الرفض!', 'تم رفض عرض التعادل. اللعبة مستمرة.');
     }
   }
 }

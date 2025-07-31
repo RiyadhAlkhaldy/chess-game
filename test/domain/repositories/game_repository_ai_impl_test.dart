@@ -14,10 +14,41 @@ void main() {
     setUp(() {
       gameRepositoryImpl = GameRepositoryImpl();
     });
-    // test('test legal moves for white Pwan ', () async {
-    //   final response = gameRepositoryImpl.getLegalMoves(Cell(row: 6, col: 1));
-    //   debugPrint(response.toString());
-    // });
+    test('test legal moves for white Pwan ', () async {
+      Board board1 = gameRepositoryImpl.currentBoard;
+      Board board2 = gameRepositoryImpl.currentBoard;
+      Piece? piece1 = board1.squares[0][0];
+      Piece? piece2 = board2.squares[0][0];
+      board1 = board1.copyWith(fullMoveNumber: 2);
+      // piece1 = piece1!.copyWith(hasMoved: true);
+      // debugPrint("piece 1 :${piece1.hashCode}");
+      // debugPrint(identityHashCode(piece1).toString());
+      // debugPrint("piece 2 :${piece2.hashCode}");
+      // debugPrint(identityHashCode(piece2).toString());
+      // // debugPrint(piece2.hashCode.toString());
+      // debugPrint((piece1 == piece2).toString());
+      ////////
+      debugPrint(board1.squares[0][0].toString());
+      debugPrint(board2.squares[0][0].toString());
+
+      ///
+      board1.squares[0][0] = Knight(
+        color: PieceColor.black,
+        type: PieceType.knight,
+      );
+      debugPrint(board1.squares[0][0].toString());
+      debugPrint(board2.squares[0][0].toString());
+
+      debugPrint(board1.hashCode.toString());
+      debugPrint(identityHashCode(board1).toString());
+      debugPrint(board2.hashCode.toString());
+      debugPrint(identityHashCode(board2).toString());
+
+      ///
+      // debugPrint(board1.hashCode.toString());
+      // debugPrint(board2.hashCode.toString());
+      // debugPrint((board1.hashCode == board2.hashCode).toString());
+    });
 
     ///
     ///

@@ -187,10 +187,10 @@ abstract class King with _$King implements Piece {
       if (board.castlingRights[color]![CastlingSide.kingSide]! &&
           board.getPieceAt(Cell(row: kingRow, col: 5)) == null &&
           board.getPieceAt(Cell(row: kingRow, col: 6)) == null) {
-        if (board.isCellUnderAttack(color, Cell(row: kingRow, col: 5)) ==
-                false &&
-            board.isCellUnderAttack(color, Cell(row: kingRow, col: 6)) ==
-                false) {
+        // if (board.isCellUnderAttack(color, Cell(row: kingRow, col: 5)) ==
+        //         false &&
+        //     board.isCellUnderAttack(color, Cell(row: kingRow, col: 6)) ==
+        //         false) {
         moves.add(
           Move(
             start: currentCell,
@@ -198,7 +198,7 @@ abstract class King with _$King implements Piece {
             isCastling: true,
           ),
         );
-        }
+        // }
       }
       // Queen-side castling
       // Check if the queen-side rook has not moved and the squares between the king and rook are empty
@@ -206,10 +206,10 @@ abstract class King with _$King implements Piece {
           board.getPieceAt(Cell(row: kingRow, col: 3)) == null &&
           board.getPieceAt(Cell(row: kingRow, col: 2)) == null &&
           board.getPieceAt(Cell(row: kingRow, col: 1)) == null) {
-        if (board.isCellUnderAttack(color, Cell(row: kingRow, col: 3)) ==
-                false &&
-            board.isCellUnderAttack(color, Cell(row: kingRow, col: 2)) ==
-                false) {
+        // if (board.isCellUnderAttack(color, Cell(row: kingRow, col: 3)) ==
+        //         false &&
+        //     board.isCellUnderAttack(color, Cell(row: kingRow, col: 2)) ==
+        //         false) {
         moves.add(
           Move(
             start: currentCell,
@@ -217,7 +217,7 @@ abstract class King with _$King implements Piece {
             isCastling: true,
           ),
         );
-        }
+        // }
       }
     }
     return moves;

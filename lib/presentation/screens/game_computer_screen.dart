@@ -52,6 +52,18 @@ class GameComputerScreen extends StatelessWidget {
               onPressed: () => controller.resetGame(),
               tooltip: 'إعادة تعيين اللعبة',
             ),
+            // زر اقتراح التعادل
+            Obx(
+              () =>
+                  controller.gameResult.value.outcome == GameOutcome.playing &&
+                          !controller.drawOffered.value
+                      ? IconButton(
+                        icon: const Icon(Icons.handshake),
+                        onPressed: () => controller.offerDraw(),
+                        tooltip: 'اقتراح تعادل',
+                      )
+                      : const SizedBox.shrink(), // إخفاء الزر إذا انتهت اللعبة أو تم تقديم عرض
+            ),
           ],
         ),
 
@@ -88,7 +100,13 @@ class GameComputerScreen extends StatelessWidget {
                       break;
                     case GameOutcome.draw:
                       statusText =
-                          'تعادل! السبب: ${controller.gameResult.value.drawReason == DrawReason.fiftyMoveRule ? 'قاعدة الخمسين حركة' : 'مواد غير كافية'}';
+                          'تعادل! السبب: ${controller.gameResult.value.drawReason == DrawReason.fiftyMoveRule
+                              ? 'قاعدة الخمسين حركة'
+                              : controller.gameResult.value.drawReason == DrawReason.threefoldRepetition
+                              ? 'تكرار ثلاثي'
+                              : controller.gameResult.value.drawReason == DrawReason.agreement
+                              ? 'بالاتفاق'
+                              : 'مواد غير كافية'}';
                       statusColor = Colors.blue;
                       break;
                   }

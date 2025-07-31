@@ -327,6 +327,216 @@ extension OnBoard on Board {
 
     return fen;
   }
+
+  /// Builds a Board object from a FEN (Forsyth-Edwards Notation) string.
+  /// يبني كائن Board من سلسلة FEN (تدوين فورسيث-إدواردز).
+  Board fenToBoard(String fen) {
+    final parts = fen.split(' ');
+    if (parts.length != 6) {
+      throw ArgumentError('Invalid FEN string: "$fen". Must have 6 parts.');
+    }
+
+    // 1. Piece placement data (board state)
+    // 1. بيانات وضع القطع (حالة اللوحة)
+    final piecePlacement = parts[0];
+    final List<List<Piece?>> squares = List.generate(
+      8,
+      (_) => List.filled(8, null),
+    );
+    final Map<PieceColor, Cell> kingPositions = {};
+
+    int row = 0;
+    int col = 0;
+    for (int i = 0; i < piecePlacement.length; i++) {
+      final char = piecePlacement[i];
+      if (char == '/') {
+        row++;
+        col = 0;
+      } else if (int.tryParse(char) != null) {
+        col += int.parse(char);
+      } else {
+        final PieceColor color =
+            char.toUpperCase() == char ? PieceColor.white : PieceColor.black;
+        PieceType type;
+        switch (char.toLowerCase()) {
+          case 'p':
+            type = PieceType.pawn;
+            break;
+          case 'r':
+            type = PieceType.rook;
+            break;
+          case 'n':
+            type = PieceType.knight;
+            break;
+          case 'b':
+            type = PieceType.bishop;
+            break;
+          case 'q':
+            type = PieceType.queen;
+            break;
+          case 'k':
+            type = PieceType.king;
+            // Track king positions
+            // تتبع مواقع الملوك
+            kingPositions[color] = Cell(row: row, col: col);
+            break;
+          default:
+            throw ArgumentError('Invalid piece character in FEN: $char');
+        }
+        // Determine if the piece has moved. For FEN, we assume all pieces
+        // have "moved" unless they are in their initial pawn/rook/king positions
+        // that allow special moves like castling or two-step pawn moves.
+        // Since FEN only gives the current state, `hasMoved` is tricky.
+        // For castling, we rely on the castling rights string.
+        // For pawns, if they are not on their starting rank, they have "moved".
+        // تحديد ما إذا كانت القطعة قد تحركت. بالنسبة لـ FEN، نفترض أن جميع القطع
+        // "تحركت" ما لم تكن في مواقعها الأولية للبيدق/الرخ/الملك
+        // التي تسمح بحركات خاصة مثل التبييت أو حركات البيدق المزدوجة.
+        // بما أن FEN يعطي الحالة الحالية فقط، فإن `hasMoved` أمر معقد.
+        // بالنسبة للتبييت، نعتمد على سلسلة حقوق التبييت.
+        // بالنسبة للبيادق، إذا لم تكن في صف البداية، فقد "تحركت".
+        bool hasMoved = true;
+        if (type == PieceType.pawn) {
+          if ((color == PieceColor.white && row == 6) ||
+              (color == PieceColor.black && row == 1)) {
+            hasMoved =
+                false; // Pawns on starting rank are considered not moved for 2-step
+            // البيادق في صف البداية تعتبر غير متحركة لحركة الخطوتين
+          }
+        } else if (type == PieceType.king) {
+          if ((color == PieceColor.white && row == 7 && col == 4) ||
+              (color == PieceColor.black && row == 0 && col == 4)) {
+            // Has moved status for King will be overwritten by castling rights.
+            // ستتم الكتابة فوق حالة "تحرك" للملك بواسطة حقوق التبييت.
+            hasMoved = false;
+          }
+        } else if (type == PieceType.rook) {
+          // Has moved status for Rook will be overwritten by castling rights.
+          // ستتم الكتابة فوق حالة "تحرك" للرخ بواسطة حقوق التبييت.
+          if ((color == PieceColor.white &&
+                  ((row == 7 && col == 0) || (row == 7 && col == 7))) ||
+              (color == PieceColor.black &&
+                  ((row == 0 && col == 0) || (row == 0 && col == 7)))) {
+            hasMoved = false;
+          }
+        }
+
+        squares[row][col] = Piece.create(
+          color: color,
+          type: type,
+          hasMoved: hasMoved,
+        );
+        col++;
+      }
+    }
+
+    // 2. Active color
+    // 2. اللون النشط
+    final currentPlayer = parts[1] == 'w' ? PieceColor.white : PieceColor.black;
+
+    // 3. Castling availability
+    // 3. توفر التبييت
+    final castlingFen = parts[2];
+    final Map<PieceColor, Map<CastlingSide, bool>> castlingRights = {
+      PieceColor.white: {
+        CastlingSide.kingSide: false,
+        CastlingSide.queenSide: false,
+      },
+      PieceColor.black: {
+        CastlingSide.kingSide: false,
+        CastlingSide.queenSide: false,
+      },
+    };
+    if (castlingFen != '-') {
+      if (castlingFen.contains('K'))
+        castlingRights[PieceColor.white]![CastlingSide.kingSide] = true;
+      if (castlingFen.contains('Q'))
+        castlingRights[PieceColor.white]![CastlingSide.queenSide] = true;
+      if (castlingFen.contains('k'))
+        castlingRights[PieceColor.black]![CastlingSide.kingSide] = true;
+      if (castlingFen.contains('q'))
+        castlingRights[PieceColor.black]![CastlingSide.queenSide] = true;
+    }
+
+    // Set hasMoved for kings and rooks based on castling rights
+    // If castling right exists for a side, the king and corresponding rook for that side must not have moved.
+    // اضبط hasMoved للملوك والرخاخ بناءً على حقوق التبييت
+    // إذا كان حق التبييت موجودًا لجانب ما، يجب ألا يكون الملك والرخ المقابل لهذا الجانب قد تحركا.
+    if (castlingRights[PieceColor.white]![CastlingSide.kingSide] == true) {
+      if (squares[7][4] is King && squares[7][4]!.color == PieceColor.white) {
+        squares[7][4] = (squares[7][4] as King).copyWith(hasMoved: false);
+      }
+      if (squares[7][7] is Rook && squares[7][7]!.color == PieceColor.white) {
+        squares[7][7] = (squares[7][7] as Rook).copyWith(hasMoved: false);
+      }
+    }
+    if (castlingRights[PieceColor.white]![CastlingSide.queenSide] == true) {
+      if (squares[7][4] is King && squares[7][4]!.color == PieceColor.white) {
+        squares[7][4] = (squares[7][4] as King).copyWith(hasMoved: false);
+      }
+      if (squares[7][0] is Rook && squares[7][0]!.color == PieceColor.white) {
+        squares[7][0] = (squares[7][0] as Rook).copyWith(hasMoved: false);
+      }
+    }
+    if (castlingRights[PieceColor.black]![CastlingSide.kingSide] == true) {
+      if (squares[0][4] is King && squares[0][4]!.color == PieceColor.black) {
+        squares[0][4] = (squares[0][4] as King).copyWith(hasMoved: false);
+      }
+      if (squares[0][7] is Rook && squares[0][7]!.color == PieceColor.black) {
+        squares[0][7] = (squares[0][7] as Rook).copyWith(hasMoved: false);
+      }
+    }
+    if (castlingRights[PieceColor.black]![CastlingSide.queenSide] == true) {
+      if (squares[0][4] is King && squares[0][4]!.color == PieceColor.black) {
+        squares[0][4] = (squares[0][4] as King).copyWith(hasMoved: false);
+      }
+      if (squares[0][0] is Rook && squares[0][0]!.color == PieceColor.black) {
+        squares[0][0] = (squares[0][0] as Rook).copyWith(hasMoved: false);
+      }
+    }
+
+    // 4. En passant target square
+    // 4. مربع الأخذ بالمرور المستهدف
+    final enPassantFen = parts[3];
+    Cell? enPassantTarget;
+    if (enPassantFen != '-') {
+      final colChar = enPassantFen.substring(0, 1);
+      final rowNum = int.parse(enPassantFen.substring(1, 2));
+      final targetCol = colChar.codeUnitAt(0) - 'a'.codeUnitAt(0);
+      final targetRow = 8 - rowNum;
+      enPassantTarget = Cell(row: targetRow, col: targetCol);
+    }
+
+    // 5. Halfmove clock
+    // 5. عداد أنصاف الحركات
+    final halfMoveClock = int.parse(parts[4]);
+
+    // 6. Fullmove number
+    // 6. رقم الحركة الكاملة
+    final fullMoveNumber = int.parse(parts[5]);
+
+    final initialFen = _boardToFen(
+      squares,
+      currentPlayer,
+      kingPositions,
+      castlingRights,
+      enPassantTarget,
+      halfMoveClock,
+      fullMoveNumber,
+    );
+
+    return Board(
+      squares: squares,
+      currentPlayer: currentPlayer,
+      kingPositions: kingPositions,
+      castlingRights: castlingRights,
+      enPassantTarget: enPassantTarget,
+      halfMoveClock: halfMoveClock,
+      fullMoveNumber: fullMoveNumber,
+      positionHistory: [initialFen], // Add the initial FEN to history
+      // أضف FEN الأولي إلى السجل
+    );
+  }
 }
 
 // دالة مساعدة لتحويل اللوحة إلى FEN (لاستخدامها في Board.initial)
@@ -402,3 +612,155 @@ String _boardToFen(
 
   return fen;
 }
+
+// /// دالة مساعدة لتحويل حالة اللوحة إلى تمثيل FEN مبسط
+// /// يستخدم لمقارنة اللوحات لتحديد التكرار الثلاثي.
+// String _boardToFEN(Board board) {
+//   String fen = '';
+//   for (int r = 0; r < 8; r++) {
+//     int emptyCount = 0;
+//     for (int c = 0; c < 8; c++) {
+//       final piece = board.squares[r][c];
+//       if (piece == null) {
+//         emptyCount++;
+//       } else {
+//         if (emptyCount > 0) {
+//           fen += '$emptyCount';
+//           emptyCount = 0;
+//         }
+//         String pieceChar = '';
+//         switch (piece.type) {
+//           case PieceType.pawn:
+//             pieceChar = 'p';
+//             break;
+//           case PieceType.rook:
+//             pieceChar = 'r';
+//             break;
+//           case PieceType.knight:
+//             pieceChar = 'n';
+//             break;
+//           case PieceType.bishop:
+//             pieceChar = 'b';
+//             break;
+//           case PieceType.queen:
+//             pieceChar = 'q';
+//             break;
+//           case PieceType.king:
+//             pieceChar = 'k';
+//             break;
+//         }
+//         fen +=
+//             (piece.color == PieceColor.white
+//                 ? pieceChar.toUpperCase()
+//                 : pieceChar);
+//       }
+//     }
+//     if (emptyCount > 0) {
+//       fen += '$emptyCount';
+//     }
+//     if (r < 7) {
+//       fen += '/';
+//     }
+//   }
+
+//   // إضافة معلومات اللاعب الحالي وحقوق الكاستلينج وحركة الـ En Passant ونصف الحركة والرقم الكامل للحركة
+//   fen += ' ${board.currentPlayer == PieceColor.white ? 'w' : 'b'}';
+
+//   String castlingRightsStr = '';
+//   if (board.castlingRights[PieceColor.white]![CastlingSide.kingSide]!) {
+//     castlingRightsStr += 'K';
+//   }
+//   if (board.castlingRights[PieceColor.white]![CastlingSide.queenSide]!) {
+//     castlingRightsStr += 'Q';
+//   }
+//   if (board.castlingRights[PieceColor.black]![CastlingSide.kingSide]!) {
+//     castlingRightsStr += 'k';
+//   }
+//   if (board.castlingRights[PieceColor.black]![CastlingSide.queenSide]!) {
+//     castlingRightsStr += 'q';
+//   }
+//   fen += ' ${castlingRightsStr.isEmpty ? '-' : castlingRightsStr}';
+
+//   // تمثيل En Passant: يجب أن يكون بتنسيق العمود والصف (a3, e6)
+//   fen +=
+//       ' ${board.enPassantTarget == null ? '-' : String.fromCharCode(97 + board.enPassantTarget!.col) + (8 - board.enPassantTarget!.row).toString()}';
+//   fen +=
+//       ' ${board.halfMoveClock}'; // قاعدة الخمسين حركة لا تُعاد تعيينها عند التكرار الثلاثي، ولكنها جزء من FEN
+//   fen += ' ${board.fullMoveNumber}';
+
+//   return fen;
+// }
+
+// // lib/data/repositories/game_repository_impl.dart
+
+// // دالة مساعدة لإنشاء "مفتاح موقف" (FEN بدون عدادات الحركة)
+// String _boardToPositionKey2(Board board) {
+//   String fen = '';
+//   for (int r = 0; r < 8; r++) {
+//     int emptyCount = 0;
+//     for (int c = 0; c < 8; c++) {
+//       final piece = board.squares[r][c];
+//       if (piece == null) {
+//         emptyCount++;
+//       } else {
+//         if (emptyCount > 0) {
+//           fen += '$emptyCount';
+//           emptyCount = 0;
+//         }
+//         String pieceChar = '';
+//         switch (piece.type) {
+//           case PieceType.pawn:
+//             pieceChar = 'p';
+//             break;
+//           case PieceType.rook:
+//             pieceChar = 'r';
+//             break;
+//           case PieceType.knight:
+//             pieceChar = 'n';
+//             break;
+//           case PieceType.bishop:
+//             pieceChar = 'b';
+//             break;
+//           case PieceType.queen:
+//             pieceChar = 'q';
+//             break;
+//           case PieceType.king:
+//             pieceChar = 'k';
+//             break;
+//         }
+//         fen +=
+//             (piece.color == PieceColor.white
+//                 ? pieceChar.toUpperCase()
+//                 : pieceChar);
+//       }
+//     }
+//     if (emptyCount > 0) {
+//       fen += '$emptyCount';
+//     }
+//     if (r < 7) {
+//       fen += '/';
+//     }
+//   }
+
+//   fen += ' ${board.currentPlayer == PieceColor.white ? 'w' : 'b'}';
+
+//   String castlingRightsStr = '';
+//   if (board.castlingRights[PieceColor.white]![CastlingSide.kingSide]!) {
+//     castlingRightsStr += 'K';
+//   }
+//   if (board.castlingRights[PieceColor.white]![CastlingSide.queenSide]!) {
+//     castlingRightsStr += 'Q';
+//   }
+//   if (board.castlingRights[PieceColor.black]![CastlingSide.kingSide]!) {
+//     castlingRightsStr += 'k';
+//   }
+//   if (board.castlingRights[PieceColor.black]![CastlingSide.queenSide]!) {
+//     castlingRightsStr += 'q';
+//   }
+//   fen += ' ${castlingRightsStr.isEmpty ? '-' : castlingRightsStr}';
+
+//   fen +=
+//       ' ${board.enPassantTarget == null ? '-' : String.fromCharCode(97 + board.enPassantTarget!.col) + (8 - board.enPassantTarget!.row).toString()}';
+
+//   return fen;
+// }
