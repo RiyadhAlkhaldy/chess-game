@@ -72,6 +72,22 @@ extension ONPiece on Piece {
   /// Creates a deep copy of the piece. Used for board simulation.
   Piece copy() => Piece(color: color, type: type);
 
+  int getValue() {
+    switch (type) {
+      case PieceType.pawn:
+        return 1;
+      case PieceType.knight:
+        return 3;
+      case PieceType.bishop:
+        return 3;
+      case PieceType.rook:
+        return 5;
+      case PieceType.queen:
+        return 9;
+      case PieceType.king:
+        return 0; // King has no value in terms of material
+    }
+  }
   /// Abstract method to get all possible raw moves for the piece, without considering
   /// whether the move puts the king in check.
   List<Move> getRawMoves(Board board, Cell currentCell) {
@@ -100,6 +116,7 @@ List<Move> getLinearMoves(
   Cell currentCell,
   PieceColor pieceColor,
   List<List<int>> directions,
+  Piece movedPiece,
 ) {
   final moves = <Move>[];
   for (var direction in directions) {
@@ -111,12 +128,21 @@ List<Move> getLinearMoves(
       final targetPiece = board.getPieceAt(nextCell);
       if (targetPiece == null) {
         // Empty square, can move
-        moves.add(Move(start: currentCell, end: nextCell));
+        moves.add(
+          Move(start: currentCell, end: nextCell, movedPiece: movedPiece),
+        );
       } else {
         // Square is occupied
         if (targetPiece.color != pieceColor) {
           // Can capture opponent's piece
-          moves.add(Move(start: currentCell, end: nextCell, isCapture: true));
+          moves.add(
+            Move(
+              start: currentCell,
+              end: nextCell,
+              isCapture: true,
+              movedPiece: movedPiece,
+            ),
+          );
         }
         // Blocked by any piece (own or opponent's)
         break;
@@ -145,6 +171,8 @@ abstract class King with _$King implements Piece {
   PieceType get type => PieceType.king;
 
   List<Move> getRawMoves(Board board, Cell currentCell) {
+    final movedPiece = Pawn(color: color, type: type, hasMoved: hasMoved);
+
     final moves = <Move>[];
     final offsets = [
       [-1, -1],
@@ -172,6 +200,7 @@ abstract class King with _$King implements Piece {
               start: currentCell,
               end: nextCell,
               isCapture: targetPiece != null,
+              movedPiece: movedPiece,
             ),
           );
         }
@@ -196,6 +225,7 @@ abstract class King with _$King implements Piece {
             start: currentCell,
             end: Cell(row: kingRow, col: 6),
             isCastling: true,
+            movedPiece: movedPiece,
           ),
         );
         // }
@@ -215,6 +245,7 @@ abstract class King with _$King implements Piece {
             start: currentCell,
             end: Cell(row: kingRow, col: 2),
             isCastling: true,
+            movedPiece: movedPiece,
           ),
         );
         // }
@@ -243,12 +274,14 @@ abstract class Queen with _$Queen implements Piece {
   PieceType get type => PieceType.queen;
 
   List<Move> getRawMoves(Board board, Cell currentCell) {
+    final movedPiece = Queen(color: color, type: type, hasMoved: hasMoved);
+
     // Queen moves like a Rook + Bishop
     final directions = [
       [-1, 0], [1, 0], [0, -1], [0, 1], // Horizontal & Vertical
       [-1, -1], [-1, 1], [1, -1], [1, 1], // Diagonal
     ];
-    return getLinearMoves(board, currentCell, color, directions);
+    return getLinearMoves(board, currentCell, color, directions, movedPiece);
   }
 
   Queen copy() => Queen(color: color, hasMoved: hasMoved, type: type);
@@ -273,13 +306,15 @@ abstract class Rook with _$Rook implements Piece {
   PieceType get type => PieceType.rook;
 
   List<Move> getRawMoves(Board board, Cell currentCell) {
+    final movedPiece = Rook(color: color, type: type, hasMoved: hasMoved);
+
     final directions = [
       [-1, 0], // Up
       [1, 0], // Down
       [0, -1], // Left
       [0, 1], // Right
     ];
-    return getLinearMoves(board, currentCell, color, directions);
+    return getLinearMoves(board, currentCell, color, directions, movedPiece);
   }
 
   Rook copy() => Rook(color: color, hasMoved: hasMoved, type: type);
@@ -302,13 +337,15 @@ abstract class Bishop with _$Bishop implements Piece {
   PieceType get type => PieceType.bishop;
 
   List<Move> getRawMoves(Board board, Cell currentCell) {
+    final movedPiece = Bishop(color: color, type: type, hasMoved: hasMoved);
+
     final directions = [
       [-1, -1],
       [-1, 1],
       [1, -1],
       [1, 1],
     ]; // All 4 diagonal directions
-    return getLinearMoves(board, currentCell, color, directions);
+    return getLinearMoves(board, currentCell, color, directions, movedPiece);
   }
 
   Bishop copy() => Bishop(color: color, hasMoved: hasMoved, type: type);
@@ -331,6 +368,7 @@ abstract class Knight with _$Knight implements Piece {
   PieceType get type => PieceType.knight;
 
   List<Move> getRawMoves(Board board, Cell currentCell) {
+    final movedPiece = Knight(color: color, type: type, hasMoved: hasMoved);
     final moves = <Move>[];
     final offsets = [
       [1, 2],
@@ -356,6 +394,7 @@ abstract class Knight with _$Knight implements Piece {
               start: currentCell,
               end: nextCell,
               isCapture: targetPiece != null,
+              movedPiece: movedPiece,
             ),
           );
         }
@@ -386,6 +425,7 @@ abstract class Pawn with _$Pawn implements Piece {
   PieceType get type => PieceType.pawn;
 
   List<Move> getRawMoves(Board board, Cell currentCell) {
+    final movedPiece = Pawn(color: color, type: type, hasMoved: hasMoved);
     final moves = <Move>[];
     final direction =
         color == PieceColor.white
@@ -402,16 +442,28 @@ abstract class Pawn with _$Pawn implements Piece {
       if (color == PieceColor.white && oneStepCell.row == 0) {
         // White pawn promotion
         moves.add(
-          Move(start: currentCell, end: oneStepCell, isPromotion: true),
+          Move(
+            start: currentCell,
+            end: oneStepCell,
+            isPromotion: true,
+            movedPiece: movedPiece,
+          ),
         );
       } else if (color == PieceColor.black && oneStepCell.row == 7) {
         // Black pawn promotion
         moves.add(
-          Move(start: currentCell, end: oneStepCell, isPromotion: true),
+          Move(
+            start: currentCell,
+            end: oneStepCell,
+            isPromotion: true,
+            movedPiece: movedPiece,
+          ),
         );
       } else {
         // Normal pawn move
-        moves.add(Move(start: currentCell, end: oneStepCell));
+        moves.add(
+          Move(start: currentCell, end: oneStepCell, movedPiece: movedPiece),
+        );
       }
     }
 
@@ -426,7 +478,12 @@ abstract class Pawn with _$Pawn implements Piece {
         twoStepCell.isValid() &&
         board.getPieceAt(twoStepCell) == null) {
       moves.add(
-        Move(start: currentCell, end: twoStepCell, isTwoStepPawnMove: true),
+        Move(
+          start: currentCell,
+          end: twoStepCell,
+          isTwoStepPawnMove: true,
+          movedPiece: movedPiece,
+        ),
       );
     }
 
@@ -445,7 +502,12 @@ abstract class Pawn with _$Pawn implements Piece {
       final targetPiece = board.getPieceAt(captureLeftCell);
       if (targetPiece != null && targetPiece.color != color) {
         moves.add(
-          Move(start: currentCell, end: captureLeftCell, isCapture: true),
+          Move(
+            start: currentCell,
+            end: captureLeftCell,
+            isCapture: true,
+            movedPiece: movedPiece,
+          ),
         );
       }
     }
@@ -455,7 +517,12 @@ abstract class Pawn with _$Pawn implements Piece {
       final targetPiece = board.getPieceAt(captureRightCell);
       if (targetPiece != null && targetPiece.color != color) {
         moves.add(
-          Move(start: currentCell, end: captureRightCell, isCapture: true),
+          Move(
+            start: currentCell,
+            end: captureRightCell,
+            isCapture: true,
+            movedPiece: movedPiece,
+          ),
         );
       }
     }
@@ -470,6 +537,7 @@ abstract class Pawn with _$Pawn implements Piece {
           start: currentCell,
           end: board.enPassantTarget!,
           isEnPassant: true,
+          movedPiece: movedPiece,
         ),
       );
     }

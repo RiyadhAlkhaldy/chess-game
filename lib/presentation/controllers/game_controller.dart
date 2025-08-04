@@ -31,7 +31,10 @@ class GameController extends GetxController {
   final PlaySoundUseCase _playSoundUseCase;
 
   /// حالة اللوحة الحالية التي يتم ملاحظتها بواسطة واجهة المستخدم.
-  final Rx<Board> board = Board.initial().obs;
+  final Rx<Board> board =
+      Board.fenToBoard(
+        'rnbqk2r/pp3ppp/2p2n2/3p2B1/1b1P4/2N2N2/PP2PPPP/R2QKB1R w KQkq - 0 1',
+      ).obs;
 
   /// الخلية المختارة حاليًا من قبل اللاعب.
   final Rx<Cell?> selectedCell = Rx<Cell?>(null);

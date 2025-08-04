@@ -24,27 +24,62 @@ void main() {
       debugPrint(gameRepositoryImpl.currentBoard.positionHistory.toString());
 
       gameRepositoryImpl.makeMove(
-        Move(start: Cell(row: 6, col: 0), end: Cell(row: 4, col: 0)),
+        Move(
+          start: Cell(row: 6, col: 0),
+          end: Cell(row: 4, col: 0),
+          isTwoStepPawnMove: true,
+          movedPiece: Pawn(
+            color: PieceColor.white,
+            type: PieceType.pawn,
+            hasMoved: false,
+          ),
+        ),
       );
       debugPrint(gameRepositoryImpl.currentBoard.positionHistory.toString());
 
       ///
 
       gameRepositoryImpl.makeMove(
-        Move(start: Cell(row: 1, col: 2), end: Cell(row: 3, col: 2)),
+        Move(
+          start: Cell(row: 1, col: 2),
+          end: Cell(row: 3, col: 2),
+          movedPiece: Pawn(
+            color: PieceColor.black,
+            type: PieceType.pawn,
+            hasMoved: false,
+          ),
+          isTwoStepPawnMove: true,
+        ),
       );
       debugPrint(gameRepositoryImpl.currentBoard.positionHistory.toString());
 
       ///
       gameRepositoryImpl.makeMove(
-        Move(start: Cell(row: 4, col: 0), end: Cell(row: 3, col: 0)),
+        Move(
+          start: Cell(row: 4, col: 0),
+          end: Cell(row: 3, col: 0),
+          movedPiece: Pawn(
+            color: PieceColor.white,
+            type: PieceType.pawn,
+            hasMoved: true,
+          ),
+        ),
       );
       debugPrint(gameRepositoryImpl.currentBoard.positionHistory.toString());
 
       ///
 
       gameRepositoryImpl.makeMove(
-        Move(start: Cell(row: 1, col: 1), end: Cell(row: 3, col: 1)),
+        Move(
+          start: Cell(row: 1, col: 1),
+          end: Cell(row: 3, col: 1),
+          movedPiece: Pawn(
+            color: PieceColor.black,
+            type: PieceType.pawn,
+            hasMoved: false,
+          ),
+          isTwoStepPawnMove: true,
+        ),
       );
       debugPrint(gameRepositoryImpl.currentBoard.positionHistory.toString());
     });
@@ -52,17 +87,33 @@ void main() {
     ///
     ///
 
-    test('test legal moves for black knight', () async {
+    test('test legal moves for white knight', () async {
       debugPrint(gameRepositoryImpl.currentBoard.positionHistory.toString());
 
       gameRepositoryImpl.makeMove(
-        Move(start: Cell(row: 7, col: 1), end: Cell(row: 5, col: 2)),
+        Move(
+          start: Cell(row: 7, col: 1),
+          end: Cell(row: 5, col: 2),
+          movedPiece: Knight(
+            color: PieceColor.white,
+            type: PieceType.knight,
+            hasMoved: false,
+          ),
+        ),
       );
       debugPrint(gameRepositoryImpl.currentBoard.positionHistory.toString());
       debugPrint('\n new \n');
 
       final board = gameRepositoryImpl.makeMove(
-        Move(start: Cell(row: 6, col: 1), end: Cell(row: 5, col: 1)),
+        Move(
+          start: Cell(row: 6, col: 1),
+          end: Cell(row: 5, col: 1),
+          movedPiece: Pawn(
+            color: PieceColor.black,
+            type: PieceType.pawn,
+            hasMoved: false,
+          ),
+        ),
       );
 
       debugPrint('\n new \n');
@@ -109,7 +160,15 @@ void main() {
     test('test get game result CheckMate', () async {
       gameRepositoryImpl.currentBoard = SomeBoardsForTest.checkMate;
       gameRepositoryImpl.makeMove(
-        Move(start: Cell(row: 1, col: 2), end: Cell(row: 1, col: 1)),
+        Move(
+          start: Cell(row: 1, col: 2),
+          end: Cell(row: 1, col: 1),
+          movedPiece: Queen(
+            color: PieceColor.white,
+            type: PieceType.queen,
+            hasMoved: true,
+          ),
+        ),
       );
       final response = gameRepositoryImpl.getGameResult();
       debugPrint(response.toString());
@@ -133,27 +192,75 @@ void main() {
       debugPrint(gameRepositoryImpl.currentBoard.currentPlayer.toString());
 
       final board1 = gameRepositoryImpl.makeMove(
-        Move(start: Cell(row: 6, col: 4), end: Cell(row: 4, col: 4)), //white
+        Move(
+          start: Cell(row: 6, col: 4),
+          end: Cell(row: 4, col: 4),
+          movedPiece: Pawn(
+            color: PieceColor.white,
+            type: PieceType.pawn,
+            hasMoved: false,
+          ),
+        ),
       );
       final board2 = gameRepositoryImpl.makeMove(
-        Move(start: Cell(row: 1, col: 4), end: Cell(row: 3, col: 4)), //black
+        Move(
+          start: Cell(row: 1, col: 4),
+          end: Cell(row: 3, col: 4),
+          movedPiece: Pawn(
+            color: PieceColor.black,
+            type: PieceType.pawn,
+            hasMoved: false,
+          ),
+        ),
       );
       final board3 = gameRepositoryImpl.makeMove(
         // move white queen
-        Move(start: Cell(row: 7, col: 3), end: Cell(row: 5, col: 5)), //white
+        Move(
+          start: Cell(row: 7, col: 3),
+          end: Cell(row: 5, col: 5),
+          movedPiece: Queen(
+            color: PieceColor.white,
+            type: PieceType.queen,
+            hasMoved: false,
+          ),
+        ),
       );
       final board4 = gameRepositoryImpl.makeMove(
         // move black queen
-        Move(start: Cell(row: 0, col: 3), end: Cell(row: 2, col: 5)), //black
+        Move(
+          start: Cell(row: 0, col: 3),
+          end: Cell(row: 2, col: 5),
+          movedPiece: Queen(
+            color: PieceColor.black,
+            type: PieceType.queen,
+            hasMoved: false,
+          ),
+        ),
       );
 
       final board5 = gameRepositoryImpl.makeMove(
         // move white queen
-        Move(start: Cell(row: 5, col: 5), end: Cell(row: 7, col: 3)),
+        Move(
+          start: Cell(row: 5, col: 5),
+          end: Cell(row: 7, col: 3),
+          movedPiece: Queen(
+            color: PieceColor.white,
+            type: PieceType.queen,
+            hasMoved: true,
+          ),
+        ),
       );
       final board6 = gameRepositoryImpl.makeMove(
         // move black queen
-        Move(start: Cell(row: 2, col: 5), end: Cell(row: 0, col: 3)),
+        Move(
+          start: Cell(row: 2, col: 5),
+          end: Cell(row: 0, col: 3),
+          movedPiece: Queen(
+            color: PieceColor.black,
+            type: PieceType.queen,
+            hasMoved: true,
+          ),
+        ),
       );
 
       ///
@@ -161,20 +268,52 @@ void main() {
       ///
       gameRepositoryImpl.makeMove(
         // move white queen
-        Move(start: Cell(row: 7, col: 3), end: Cell(row: 5, col: 5)), //white
+        Move(
+          start: Cell(row: 7, col: 3),
+          end: Cell(row: 5, col: 5),
+          movedPiece: Queen(
+            color: PieceColor.white,
+            type: PieceType.queen,
+            hasMoved: true,
+          ),
+        ),
       );
       gameRepositoryImpl.makeMove(
         // move black queen
-        Move(start: Cell(row: 0, col: 3), end: Cell(row: 2, col: 5)), //black
+        Move(
+          start: Cell(row: 0, col: 3),
+          end: Cell(row: 2, col: 5),
+          movedPiece: Queen(
+            color: PieceColor.black,
+            type: PieceType.queen,
+            hasMoved: true,
+          ),
+        ),
       );
 
       gameRepositoryImpl.makeMove(
         // move white queen
-        Move(start: Cell(row: 5, col: 5), end: Cell(row: 7, col: 3)),
+        Move(
+          start: Cell(row: 5, col: 5),
+          end: Cell(row: 7, col: 3),
+          movedPiece: Queen(
+            color: PieceColor.white,
+            type: PieceType.queen,
+            hasMoved: true,
+          ),
+        ),
       );
       gameRepositoryImpl.makeMove(
         // move black queen
-        Move(start: Cell(row: 2, col: 5), end: Cell(row: 0, col: 3)),
+        Move(
+          start: Cell(row: 2, col: 5),
+          end: Cell(row: 0, col: 3),
+          movedPiece: Queen(
+            color: PieceColor.black,
+            type: PieceType.queen,
+            hasMoved: true,
+          ),
+        ),
       );
 
       ///
@@ -182,20 +321,52 @@ void main() {
       ///
       gameRepositoryImpl.makeMove(
         // move white queen
-        Move(start: Cell(row: 7, col: 3), end: Cell(row: 5, col: 5)), //white
+        Move(
+          start: Cell(row: 7, col: 3),
+          end: Cell(row: 5, col: 5),
+          movedPiece: Queen(
+            color: PieceColor.white,
+            type: PieceType.queen,
+            hasMoved: true,
+          ),
+        ),
       );
       gameRepositoryImpl.makeMove(
         // move black queen
-        Move(start: Cell(row: 0, col: 3), end: Cell(row: 2, col: 5)), //black
+        Move(
+          start: Cell(row: 0, col: 3),
+          end: Cell(row: 2, col: 5),
+          movedPiece: Queen(
+            color: PieceColor.black,
+            type: PieceType.queen,
+            hasMoved: true,
+          ),
+        ),
       );
 
       gameRepositoryImpl.makeMove(
         // move white queen
-        Move(start: Cell(row: 5, col: 5), end: Cell(row: 7, col: 3)),
+        Move(
+          start: Cell(row: 5, col: 5),
+          end: Cell(row: 7, col: 3),
+          movedPiece: Queen(
+            color: PieceColor.white,
+            type: PieceType.queen,
+            hasMoved: true,
+          ),
+        ),
       );
       gameRepositoryImpl.makeMove(
         // move black queen
-        Move(start: Cell(row: 2, col: 5), end: Cell(row: 0, col: 3)),
+        Move(
+          start: Cell(row: 2, col: 5),
+          end: Cell(row: 0, col: 3),
+          movedPiece: Queen(
+            color: PieceColor.black,
+            type: PieceType.queen,
+            hasMoved: true,
+          ),
+        ),
       );
       var response = gameRepositoryImpl.getGameResult();
       debugPrint(response.toString());

@@ -67,7 +67,7 @@ class TranspositionEntry {
 /// [NodeType]
 /// أنواع العقد في جدول التحويل.
 /// Node types in the transposition table.
-enum NodeType { exact, lowerBound, upperBound }
+enum NodeType { exact, alpha, beta }
 
 /// [_AILogic]
 /// يحتوي هذا الكلاس على منطق الذكاء الاصطناعي الرئيسي (Minimax, Alpha-Beta, Evaluation).

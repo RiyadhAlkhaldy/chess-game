@@ -48,6 +48,13 @@ mixin GameRepositoryImplMixin {
               start: kingCell,
               end: Cell(row: kingRow, col: 6),
               isCastling: true,
+              movedPiece: King(
+                color: kingColor,
+                type: PieceType.king,
+                hasMoved: true,
+              ),
+              castlingRookFrom: rookCell,
+              castlingRookTo: Cell(row: kingRow, col: 5),
             ),
           );
         }
@@ -73,6 +80,13 @@ mixin GameRepositoryImplMixin {
               start: kingCell,
               end: Cell(row: kingRow, col: 2),
               isCastling: true,
+              movedPiece: King(
+                color: kingColor,
+                type: PieceType.king,
+                hasMoved: true,
+              ),
+              castlingRookFrom: rookCell,
+              castlingRookTo: Cell(row: kingRow, col: 3),
             ),
           );
         }
@@ -115,6 +129,13 @@ mixin GameRepositoryImplMixin {
                 end: board.enPassantTarget!,
                 isEnPassant: true,
                 isCapture: true, // En Passant هو نوع من أنواع الأسر
+                movedPiece: Pawn(
+                  color: pawnColor,
+                  type: PieceType.pawn,
+                  hasMoved: true,
+                ),
+                capturedPiece: board.getPieceAt(board.enPassantTarget!),
+                // enPassantTargetBefore: board.enPassantTarget,
               ),
             );
           }
@@ -128,10 +149,17 @@ mixin GameRepositoryImplMixin {
 class GameRepositoryImpl extends GameRepository with GameRepositoryImplMixin {
   Board currentBoard;
   List<Board> _boardHistory = []; // لتتبع تكرار اللوحة
+  List<Move> redoStack = []; // لتتبع الحركات التي يمكن التراجع عنها
+  static bool _zobristKeysInitialized = false;
 
   /// مُنشئ لـ [GameRepositoryImpl]. يبدأ اللعبة بلوحة أولية للاعب الأبيض.
+  // 'rnbqk2r/pp3ppp/2p2n2/3p2B1/1b1P4/2N2N2/PP2PPPP/R2QKB1R w KQkq - 0 1',
   GameRepositoryImpl() : currentBoard = Board.initial() {
     _boardHistory.add(currentBoard);
+    if (!_zobristKeysInitialized) {
+      _initializeZobristKeys();
+      _zobristKeysInitialized = true;
+    }
   }
 
   @override
@@ -506,22 +534,101 @@ class GameRepositoryImpl extends GameRepository with GameRepositoryImplMixin {
     PieceColor aiPlayerColor,
     int aiDepth,
   ) async {
-    return findBestMove(board, aiDepth);
-    if (!hasAnyLegalMoves(aiPlayerColor, board)) {
-      return null;
-    }
-    // تشغيل خوارزمية Minimax مع قيم ألفا وبيتا الأولية
-    final result = await minimax(
-      board: board.copyWith(currentPlayer: aiPlayerColor),
-      depth: aiDepth,
-      maximizingPlayer: true,
-      aiPlayerColor: aiPlayerColor,
-      alpha: -99999, // قيمة ألفا الأولية
-      beta: 99999, // قيمة بيتا الأولية
-    );
-    print("result.move myint i = $i ");
+    // return findBestMove(board, aiDepth);
+    List<Move> legalMoves = board.getAllLegalMovesForCurrentPlayer();
+    Move? bestMove;
+    int bestValue = -10000;
 
-    return result.move;
+    for (Move move in legalMoves) {
+      Board simulatedBoard = board.simulateMove(move);
+      // Use alpha-beta pruning to evaluate the move
+      int moveValue = await alphaBeta(
+        simulatedBoard,
+        aiDepth - 1,
+        -10000,
+        10000,
+        false,
+      );
+
+      if (moveValue > bestValue) {
+        bestValue = moveValue;
+        bestMove = move;
+      }
+    }
+
+    return bestMove;
+  }
+
+  Future<int> alphaBeta(
+    Board board,
+    int depth,
+    int alpha,
+    int beta,
+
+    bool isMaximizing,
+  ) async {
+    if (depth == 0 || board.isGameOver()) {
+      return board.evaluateBoard();
+    }
+
+    List<Move> legalMoves = board.getAllLegalMovesForCurrentPlayer();
+
+    if (isMaximizing) {
+      int bestValue = -10000;
+      for (Move move in legalMoves) {
+        Board simulatedBoard = board.simulateMove(move);
+
+        int moveValue = await alphaBeta(
+          simulatedBoard,
+
+          depth - 1,
+
+          alpha,
+
+          beta,
+
+          false,
+        );
+
+        bestValue = max(bestValue, moveValue);
+
+        alpha = max(alpha, moveValue);
+
+        if (beta <= alpha) {
+          break; // Beta cut-off
+        }
+      }
+
+      return bestValue;
+    } else {
+      int bestValue = 10000;
+
+      for (Move move in legalMoves) {
+        Board simulatedBoard = board.simulateMove(move);
+
+        int moveValue = await alphaBeta(
+          simulatedBoard,
+
+          depth - 1,
+
+          alpha,
+
+          beta,
+
+          true,
+        );
+
+        bestValue = min(bestValue, moveValue);
+
+        beta = min(beta, moveValue);
+
+        if (beta <= alpha) {
+          break; // Alpha cut-off
+        }
+      }
+
+      return bestValue;
+    }
   }
 
   static int i = 0;
@@ -533,125 +640,6 @@ class GameRepositoryImpl extends GameRepository with GameRepositoryImplMixin {
   /// [aiPlayerColor]: لون قطع الذكاء الاصطناعي.
   /// [alpha]: أفضل قيمة (الحد الأدنى) تم العثور عليها حتى الآن في مسار لاعب التعظيم.
   /// [beta]: أفضل قيمة (الحد الأقصى) تم العثور عليها حتى الآن في مسار لاعب التقليل.
-
-  Future<({int score, Move? move})> minimax({
-    required Board board,
-    required int depth,
-    required bool maximizingPlayer,
-    required PieceColor aiPlayerColor,
-    required int alpha,
-    required int beta,
-  }) async {
-    i++;
-    // نقطة النهاية للبحث: إذا وصل العمق إلى 0
-    if (depth == 0) {
-      return (score: _evaluateBoard(board, aiPlayerColor), move: null);
-    }
-    // Debug print لمتابعة العمق
-
-    // التحقق من شروط نهاية اللعبة
-    final gameResult = checkGameEndConditions(board, true);
-    if (gameResult.outcome != GameOutcome.playing) {
-      if (gameResult.outcome == GameOutcome.checkmate) {
-        // إذا كان كش ملك، قيم النتيجة بناءً على من فاز (AI أو الخصم)
-        final winnerIsAI = (gameResult.winner == aiPlayerColor);
-        // استخدام قيم قصوى/دنيا لتمثيل نهاية اللعبة (لا يمكن تحقيقها بالتقييم العادي)
-        return (score: winnerIsAI ? 99999 : -99999, move: null);
-      } else if (gameResult.outcome == GameOutcome.stalemate ||
-          gameResult.outcome == GameOutcome.draw) {
-        // التعادل أو الطريق المسدود له قيمة 0
-        return (score: 0, move: null);
-      }
-    }
-
-    // جلب جميع الحركات القانونية للاعب الحالي في هذه اللوحة
-    // اللاعب الحالي في 'board' هو الذي يجب أن يقوم بالحركة في هذا المستوى من الشجرة.
-    final List<Move> legalMovesForCurrentNode = _getAllLegalMovesForBoard(
-      board,
-      board.currentPlayer, // استخدم اللاعب الحالي للوحة الممررة
-    );
-    _sortMoves(legalMovesForCurrentNode, board); // دالة جديدة لترتيب الحركات
-
-    // إذا لم يكن هناك حركات قانونية (وقد تم التعامل مع Checkmate/Stalemate بالفعل)
-    // هذا يعني أن الموقف الحالي هو طريق مسدود أو خطأ.
-    if (legalMovesForCurrentNode.isEmpty) {
-      // بما أننا قمنا بفحص gameResult أعلاه، فإن هذه الحالة يجب أن تكون قد تم تغطيتها.
-      // إذا وصلنا هنا، فهذا يعني أن اللعبة لم تنته ولكن لا توجد حركات قانونية
-      // (وهذا لا ينبغي أن يحدث في لعبة الشطرنج العادية ما لم يكن هناك طريق مسدود لم يتم الكشف عنه).
-      // لذا، نرجع تقييم اللوحة كاحتياطي.
-      return (score: _evaluateBoard(board, aiPlayerColor), move: null);
-    }
-
-    if (maximizingPlayer) {
-      int maxEval = -99999;
-      Move? bestMove;
-
-      for (final move in legalMovesForCurrentNode) {
-        // قم بمحاكاة الحركة: هذه الدالة ستعيد لوحة جديدة مع تحديث جميع الخصائص
-        // بما في ذلك 'currentPlayer' إلى اللاعب التالي.
-        final simulatedBoard = SimulateMove.simulateMove(board, move);
-
-        final evalResult = await minimax(
-          board: simulatedBoard, // استخدم اللوحة المحاكاة مباشرة
-          depth: depth - 1,
-          maximizingPlayer: !maximizingPlayer, // الآن دور الخصم (لاعب التقليل)
-          aiPlayerColor: aiPlayerColor,
-          alpha: alpha,
-          beta: beta,
-        );
-        board = simulatedBoard.copyWith();
-        if (evalResult.score > maxEval) {
-          maxEval = evalResult.score;
-          bestMove = move;
-        }
-        alpha = max(alpha, evalResult.score); // تحديث Alpha
-
-        if (beta <= alpha) {
-          // تقليم Beta: لا حاجة لاستكشاف هذا الفرع بعد الآن لأن الخصم سيختار مسارًا أفضل.
-          debugPrint('Alpha-Beta Pruning: Beta cut in Max node');
-          break;
-        }
-      }
-      return (score: maxEval, move: bestMove);
-    } else {
-      debugPrint(board.positionHistory.toString());
-      debugPrint('\n depth = $depth !maximizingPlayer =$maximizingPlayer \n');
-      // الخصم (لاعب التقليل): يحاول إيجاد أفضل حركة تقلل من نتيجة الذكاء الاصطناعي.
-      int minEval = 99999;
-      Move?
-      bestMove; // يتم الاحتفاظ بها هنا لأغراض تصحيح الأخطاء إذا لزم الأمر، ولكنها لا تحدد حركة AI.
-
-      for (final move in legalMovesForCurrentNode) {
-        // قم بمحاكاة الحركة بنفس الطريقة
-        final simulatedBoard = SimulateMove.simulateMove(board, move);
-
-        final evalResult = await minimax(
-          board: simulatedBoard,
-          depth: depth - 1,
-          maximizingPlayer:
-              !maximizingPlayer, // الآن دور الذكاء الاصطناعي (لاعب التعظيم)
-          aiPlayerColor: aiPlayerColor,
-          alpha: alpha,
-          beta: beta,
-        );
-        board = simulatedBoard.copyWith();
-
-        if (evalResult.score < minEval) {
-          minEval = evalResult.score;
-          bestMove = move;
-        }
-        beta = min(beta, evalResult.score); // تحديث Beta
-
-        if (beta <= alpha) {
-          // تقليم Alpha: لا حاجة لاستكشاف هذا الفرع بعد الآن لأن الذكاء الاصطناعي (في مستوى أعلى)
-          // قد وجد بالفعل مسارًا أفضل.
-          debugPrint('Alpha-Beta Pruning: Alpha cut in Min node');
-          break;
-        }
-      }
-      return (score: minEval, move: bestMove);
-    }
-  }
 
   /// دالة مساعدة للحصول على جميع الحركات القانونية للوحة معينة ولون لاعب معين.
   /// هذه نسخة من `getAllLegalMovesForCurrentPlayer` ولكنها تعمل على لوحة مُعطاة.
@@ -719,10 +707,8 @@ extension AiLogic on GameRepositoryImpl {
 
     // ترتيب الحركات لتحسين Alpha-Beta Pruning.
     // Order moves to improve Alpha-Beta Pruning.
-    // _orderMoves(legalMoves, board);
-    int n = 0;
-    int boardValue = 0;
-
+    _sortMoves(legalMoves, board);
+    int boardValue = -99999;
     for (final move in legalMoves) {
       // تطبيق الحركة على نسخة من اللوحة.
       // Apply the move to a copy of the board.
@@ -730,7 +716,7 @@ extension AiLogic on GameRepositoryImpl {
       //   "minimaxRoot n = ${++n} from ${legalMoves.length} $boardValue",
       // );
 
-      final newBoard = simulateMove(board.copyWithDeepPieces(), move);
+      final newBoard = simulateMove(board, move);
       // تبديل اللاعب الحالي.
       // Switch the current player.
       final simulatedBoard = newBoard.copyWith(
@@ -739,7 +725,6 @@ extension AiLogic on GameRepositoryImpl {
                 ? PieceColor.black
                 : PieceColor.white,
       );
-      // .copyWithDeepPieces();
 
       // استدعاء Minimax لحساب قيمة هذه الوضعية.
       // Call Minimax to calculate the value of this position.
@@ -793,10 +778,10 @@ extension AiLogic on GameRepositoryImpl {
       // AI's turn
       int maxEval = -99999;
       final List<Move> legalMoves = _getLegalMoves(board, currentPlayer);
-      // _orderMoves(legalMoves, board);
+      _sortMoves(legalMoves, board);
 
       for (final move in legalMoves) {
-        final newBoard = simulateMove(board.copyWithDeepPieces(), move);
+        final newBoard = simulateMove(board, move);
         final simulatedBoard = newBoard.copyWith(
           currentPlayer:
               currentPlayer == PieceColor.white
@@ -830,10 +815,10 @@ extension AiLogic on GameRepositoryImpl {
       // Opponent's turn
       int minEval = 99999;
       final List<Move> legalMoves = _getLegalMoves(board, currentPlayer);
-      // _orderMoves(legalMoves, board);
+      _sortMoves(legalMoves, board);
 
       for (final move in legalMoves) {
-        final newBoard = simulateMove(board.copyWithDeepPieces(), move);
+        final newBoard = simulateMove(board, move);
         final simulatedBoard = newBoard.copyWith(
           currentPlayer:
               currentPlayer == PieceColor.white
@@ -854,6 +839,7 @@ extension AiLogic on GameRepositoryImpl {
           break;
         }
       }
+
       // _transpositionTable[fen] = TranspositionEntry(
       //   minEval,
       //   depth,
@@ -915,15 +901,6 @@ extension ZobristHashing on GameRepositoryImpl {
       {};
   static final Map<int, int> _zobristEnPassantKeys = {}; // 8 قيم لـ a-h
 
-  static bool _zobristKeysInitialized = false;
-
-  GameRepositoryImpl() {
-    if (!_zobristKeysInitialized) {
-      _initializeZobristKeys();
-      _zobristKeysInitialized = true;
-    }
-  }
-
   void _initializeZobristKeys() {
     final Random random = Random(42); // استخدام seed ثابت لأغراض الاختبار
 
@@ -976,14 +953,18 @@ extension ZobristHashing on GameRepositoryImpl {
     hash ^= _zobristSideToMoveKeys[board.currentPlayer]!;
 
     // 3. حقوق التبييت
-    if (board.castlingRights[PieceColor.white]![CastlingSide.kingSide]!)
+    if (board.castlingRights[PieceColor.white]![CastlingSide.kingSide]!) {
       hash ^= _zobristCastlingKeys[CastlingSide.kingSide]![PieceColor.white]!;
-    if (board.castlingRights[PieceColor.white]![CastlingSide.queenSide]!)
+    }
+    if (board.castlingRights[PieceColor.white]![CastlingSide.queenSide]!) {
       hash ^= _zobristCastlingKeys[CastlingSide.queenSide]![PieceColor.white]!;
-    if (board.castlingRights[PieceColor.black]![CastlingSide.kingSide]!)
+    }
+    if (board.castlingRights[PieceColor.black]![CastlingSide.kingSide]!) {
       hash ^= _zobristCastlingKeys[CastlingSide.kingSide]![PieceColor.black]!;
-    if (board.castlingRights[PieceColor.black]![CastlingSide.queenSide]!)
+    }
+    if (board.castlingRights[PieceColor.black]![CastlingSide.queenSide]!) {
       hash ^= _zobristCastlingKeys[CastlingSide.queenSide]![PieceColor.black]!;
+    }
 
     ///
     // 4. هدف الأسر بالمرور

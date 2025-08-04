@@ -51,10 +51,64 @@ extension EvaluateBoardForMinimax on GameRepositoryImpl {
     // ... أضف جداول للملك، الأسقف، الرخ، والملكة
     // جداول الملك تختلف لمرحلة الافتتاح/الوسط والنهاية
   };
-  
+  double evaluateBoardScore(Board board, PieceColor aiColor) {
+    double score = 0.0;
+
+    for (int y = 0; y < 8; y++) {
+      for (int x = 0; x < 8; x++) {
+        final piece = board.getPieceAt(Cell(row: y, col: x));
+        if (piece != null) {
+          double value = _getPieceValue(piece.type);
+          score += piece.color == aiColor ? value : -value;
+        }
+      }
+    }
+
+    return score;
+  }
+
+  double _getPieceValue(PieceType type) {
+    switch (type) {
+      case PieceType.pawn:
+        return 1.0;
+      case PieceType.knight:
+        return 3.0;
+      case PieceType.bishop:
+        return 3.3;
+      case PieceType.rook:
+        return 5.0;
+      case PieceType.queen:
+        return 9.0;
+      case PieceType.king:
+        return 1000.0;
+    }
+  }
+
+  List<Move> orderMoves(List<Move> moves) {
+    moves.sort((a, b) {
+      int aScore = _moveScore(a);
+      int bScore = _moveScore(b);
+      return bScore.compareTo(aScore); // ترتيب تنازلي
+    });
+    return moves;
+  }
+
+  int _moveScore(Move move) {
+    int score = 0;
+    if (move.isCapture == true) score += 100;
+    if (move.isPromotion == true) score += 80;
+    // يمكن إضافة المزيد من الشروط لتقييم الحركة
+    // على سبيل المثال:
+    if (move.isEnPassant == true) score += 50;
+    if (move.isCastling == true) score += 30;
+    // يمكن إضافة تقييمات للكش أو الشيك ميت
+    // مثال:
+    // if (move.isCheckmate) score += 200;
+    // if (move.isCheck) score += 50;
+    return score;
+  }
 
   int _evaluateBoard(Board board, PieceColor aiPlayerColor) {
-    debugPrint("_evaluateBoard");
 
     int score = 0;
     for (int r = 0; r < 8; r++) {
@@ -122,7 +176,7 @@ extension EvaluateBoardForMinimax on GameRepositoryImpl {
     //    * خصم على البيادق المتضاعفة (Doubled Pawns).
     //    * مكافأة على البيادق المتصلة (Connected Pawns).
     // هذا يتطلب دالة مساعدة لتحليل البيادق.
-    // score += _evaluatePawnStructure(board, aiPlayerColor);
+    score += _evaluatePawnStructure(board, aiPlayerColor);
 
     // 4. نشاط القطع:
     //    * مكافأة على القطع النشطة (التي لديها العديد من الحركات المحتملة).
@@ -183,8 +237,6 @@ extension EvaluateBoardForMinimax on GameRepositoryImpl {
     }
     return pawnStructureScore;
   }
-
-
 }
 
 extension CheckGameConditions on GameRepositoryImpl {

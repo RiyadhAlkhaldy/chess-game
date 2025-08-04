@@ -442,8 +442,9 @@ class AIController {
     Figure? figure; // Make figure nullable
     List<Cell> list;
     do {
-      if (player.getFigures().isEmpty)
+      if (player.getFigures().isEmpty) {
         return null; // Handle case where player has no figures
+      }
       figure = player.getFigures()[random.nextInt(player.getFigures().length)];
       Cell? fromCell = moveController.findCellByFigure(figure, cells);
       list = moveController.filterByCheck(

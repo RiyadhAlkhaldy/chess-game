@@ -1,5 +1,6 @@
 // lib/domain/entities/move.dart
 import 'package:freezed_annotation/freezed_annotation.dart';
+
 import 'cell.dart';
 import 'piece.dart'; // Needed for PieceType in promotion
 
@@ -22,6 +23,16 @@ abstract class Move with _$Move {
     @Default(false)
     bool
     isTwoStepPawnMove, // True if a pawn moved two squares (for en passant tracking)
+    required Piece movedPiece,
+    Piece? capturedPiece,
+    Piece? promotedTo,
+    Cell? enPassantTargetBefore,
+    bool? wasFirstMoveKing,
+    bool? wasFirstMoveRook,
+    int? halfMoveClockBefore,
+    int? fullMoveNumberBefore,
+    Cell? castlingRookFrom,
+    Cell? castlingRookTo,
   }) = _Move;
 
   factory Move.fromJson(Map<String, dynamic> json) => _$MoveFromJson(json);
