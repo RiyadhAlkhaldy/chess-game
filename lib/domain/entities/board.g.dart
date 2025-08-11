@@ -71,7 +71,7 @@ _Board _$BoardFromJson(Map<String, dynamic> json) => _Board(
           ?.map((e) => e as String)
           .toList() ??
       const [],
-  zobristKey: (json['zobristKey'] as num?)?.toInt() ?? 0,
+  zobristKey: (json['zobristKey'] as num).toInt(),
 );
 
 Map<String, dynamic> _$BoardToJson(_Board instance) => <String, dynamic>{

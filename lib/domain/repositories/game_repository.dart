@@ -72,5 +72,5 @@ abstract class GameRepository {
   /// [findBestMove]
   /// تبحث عن أفضل حركة للوحة المعطاة وعمق البحث.
   /// Finds the best move for the given board and search depth.
-  Future<Move?> findBestMove(Board board, int depth);
+  // Future<Move?> findBestMove(Board board, int depth);
 }

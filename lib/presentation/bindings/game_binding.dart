@@ -2,7 +2,6 @@
 import 'package:chess_gemini_2/domain/usecases/play_sound_usecase.dart';
 import 'package:get/get.dart';
 
-import '../../data/ai_engine.dart';
 import '../../data/local_storage_service.dart';
 import '../../domain/repositories/ai_game_repository_impl.dart';
 import '../../domain/repositories/audio_player_service_impl.dart';
@@ -41,7 +40,6 @@ class GameBinding extends Bindings {
       () => LocalStorageService(),
       fenix: true,
     ); // Local storage service
-    Get.lazyPut<AIEngine>(() => AIEngine(), fenix: true); // AI logic engine
 
     // GameRepositoryImpl depends on LocalStorageService and AIEngine
     Get.lazyPut<GameRepository>(() => GameRepositoryImpl(), fenix: true);

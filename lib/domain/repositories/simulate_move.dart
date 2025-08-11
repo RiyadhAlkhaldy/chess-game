@@ -4,6 +4,7 @@ import '../entities/board.dart';
 import '../entities/cell.dart';
 import '../entities/move.dart';
 import '../entities/piece.dart';
+import 'zobrist_hashing.dart';
 
 // lib/data/repositories/game_repository_impl.dart
 
@@ -109,48 +110,106 @@ class SimulateMove {
     Map<PieceColor, Map<CastlingSide, bool>> newCastlingRights = Map.from(
       simulatedBoard.castlingRights,
     );
-
-    // إذا تحرك الملك، يفقد حقوق التبييت.
+    // إذا تحرك الملك، يفقد حقوق الكاستلينج
     if (pieceToMove.type == PieceType.king) {
-      newCastlingRights[pieceToMove.color] = {
-        CastlingSide.kingSide: false,
-        CastlingSide.queenSide: false,
-      };
+      newCastlingRights =
+          newCastlingRights..update(
+            pieceToMove.color,
+            (value) =>
+                Map.from(value)
+                  ..update(CastlingSide.kingSide, (value) => false)
+                  ..update(CastlingSide.queenSide, (value) => false),
+          );
     }
-    // إذا تحرك الرخ من موقعه الأصلي، يفقد حقوق التبييت لهذا الجانب.
+
+    // إذا تحرك الرخ من موضعه الأصلي، يفقد حقوق الكاستلينج لتلك الجهة
     if (pieceToMove.type == PieceType.rook) {
       if (pieceToMove.color == PieceColor.white) {
         if (move.start == const Cell(row: 7, col: 0)) {
-          // Rook at A1
-          newCastlingRights[PieceColor.white]![CastlingSide.queenSide] = false;
+          // رخ أبيض يسار
+          newCastlingRights =
+              newCastlingRights..update(
+                PieceColor.white,
+                (value) =>
+                    Map.from(value)
+                      ..update(CastlingSide.queenSide, (value) => false),
+              );
         } else if (move.start == const Cell(row: 7, col: 7)) {
-          // Rook at H1
-          newCastlingRights[PieceColor.white]![CastlingSide.kingSide] = false;
+          // رخ أبيض يمين
+          newCastlingRights =
+              newCastlingRights..update(
+                PieceColor.white,
+                (value) =>
+                    Map.from(value)
+                      ..update(CastlingSide.kingSide, (value) => false),
+              );
         }
       } else {
+        // Black rook
         if (move.start == const Cell(row: 0, col: 0)) {
-          // Rook at A8
-          newCastlingRights[PieceColor.black]![CastlingSide.queenSide] = false;
+          // رخ أسود يسار
+          newCastlingRights =
+              newCastlingRights..update(
+                PieceColor.black,
+                (value) =>
+                    Map.from(value)
+                      ..update(CastlingSide.queenSide, (value) => false),
+              );
         } else if (move.start == const Cell(row: 0, col: 7)) {
-          // Rook at H8
-          newCastlingRights[PieceColor.black]![CastlingSide.kingSide] = false;
+          // رخ أسود يمين
+          newCastlingRights =
+              newCastlingRights..update(
+                PieceColor.black,
+                (value) =>
+                    Map.from(value)
+                      ..update(CastlingSide.kingSide, (value) => false),
+              );
         }
       }
     }
-    // إذا تم أسر رخ العدو في موقعه الأصلي، يفقد العدو حقوق التبييت لذلك الجانب.
+    // إذا تم أسر الرخ، يفقد حقوق الكاستلينج للخصم لتلك الجهة
     if (move.isCapture) {
-      if (move.end == const Cell(row: 0, col: 0)) {
-        // Captured at A8
-        newCastlingRights[PieceColor.black]![CastlingSide.queenSide] = false;
-      } else if (move.end == const Cell(row: 0, col: 7)) {
-        // Captured at H8
-        newCastlingRights[PieceColor.black]![CastlingSide.kingSide] = false;
-      } else if (move.end == const Cell(row: 7, col: 0)) {
-        // Captured at A1
-        newCastlingRights[PieceColor.white]![CastlingSide.queenSide] = false;
-      } else if (move.end == const Cell(row: 7, col: 7)) {
-        // Captured at H1
-        newCastlingRights[PieceColor.white]![CastlingSide.kingSide] = false;
+      // تحقق من الرخ الذي تم أسره (إذا كان رخ)
+      if (move.end == const Cell(row: 0, col: 0) &&
+          simulatedBoard.getPieceAt(move.end)?.type == PieceType.rook) {
+        // رخ أسود يسار
+        newCastlingRights =
+            newCastlingRights..update(
+              PieceColor.black,
+              (value) =>
+                  Map.from(value)
+                    ..update(CastlingSide.queenSide, (value) => false),
+            );
+      } else if (move.end == const Cell(row: 0, col: 7) &&
+          simulatedBoard.getPieceAt(move.end)?.type == PieceType.rook) {
+        // رخ أسود يمين
+        newCastlingRights =
+            newCastlingRights..update(
+              PieceColor.black,
+              (value) =>
+                  Map.from(value)
+                    ..update(CastlingSide.kingSide, (value) => false),
+            );
+      } else if (move.end == const Cell(row: 7, col: 0) &&
+          simulatedBoard.getPieceAt(move.end)?.type == PieceType.rook) {
+        // رخ أبيض يسار
+        newCastlingRights =
+            newCastlingRights..update(
+              PieceColor.white,
+              (value) =>
+                  Map.from(value)
+                    ..update(CastlingSide.queenSide, (value) => false),
+            );
+      } else if (move.end == const Cell(row: 7, col: 7) &&
+          simulatedBoard.getPieceAt(move.end)?.type == PieceType.rook) {
+        // رخ أبيض يمين
+        newCastlingRights =
+            newCastlingRights..update(
+              PieceColor.white,
+              (value) =>
+                  Map.from(value)
+                    ..update(CastlingSide.kingSide, (value) => false),
+            );
       }
     }
 
@@ -180,6 +239,7 @@ class SimulateMove {
           halfMoveClock: newHalfMoveClock,
           fullMoveNumber: newFullMoveNumber,
           positionHistory: newPositionHistory,
+          zobristKey: ZobristHashing.updateZobristKeyAfterMove(simulatedBoard, move)
           // لا تقم بتضمين moveHistory هنا ما لم تكن بحاجة لتتبعها داخل Minimax لأسباب خاصة (مثل قاعدة التكرار الثلاثي في العقد الفرعية، وهو أمر معقد وغير شائع).
           // عادةً، يتم فحص التكرار الثلاثي على لوحات اللعبة الفعلية.
         )

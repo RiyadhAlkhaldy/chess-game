@@ -434,5 +434,5 @@ void printBoard(Board board) {
 
 extension MakeBoardForTest on GameRepositoryImpl {
   set currentBaord(Board board) => currentBoard = board;
-  // get cuttentBoard => currentBoard;
+  get cuttentBoard => currentBoard;
 }

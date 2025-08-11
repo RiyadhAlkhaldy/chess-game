@@ -1,165 +1,39 @@
-// lib/data/repositories/game_repository_impl.dart
 import 'dart:math';
 
+import 'package:chess_gemini_2/domain/repositories/zobrist_hashing.dart';
 import 'package:flutter/material.dart';
 
-import '../../domain/entities/board.dart';
-import '../../domain/entities/cell.dart';
-import '../../domain/entities/game_result.dart';
-import '../../domain/entities/move.dart';
-import '../../domain/entities/piece.dart';
+import '../../data/chess_logic.dart';
 import '../../domain/repositories/game_repository.dart';
+import '../entities/export.dart';
 import 'ai_game_repository_impl.dart';
 import 'simulate_move.dart';
 
-part 'ai_game_repo.dart';
 part 'extension_repository_impl.dart';
 
-mixin GameRepositoryImplMixin {
-  /// دالة مساعدة خاصة لإضافة حركات الكاستلينج بعد التحقق من شرعيتها.
-  /// الكاستلينج له قواعد خاصة لا يمكن التحقق منها فقط من خلال getRawMoves.
-  void _addCastlingMoves(
-    List<Move> moves,
-    Cell kingCell,
-    PieceColor kingColor,
-    Board board,
-  ) {
-    if (kingColor != board.currentPlayer) return;
-    if (board.isKingInCheck(kingColor)) {
-      return; // لا يمكن الكاستلينج إذا كان الملك في كش
-    }
-
-    final int kingRow = kingColor == PieceColor.white ? 7 : 0;
-
-    // الكاستلينج لجهة الملك (King-side Castling)
-    if (board.castlingRights[kingColor]![CastlingSide.kingSide]!) {
-      final Cell rookCell = Cell(row: kingRow, col: 7);
-      final Piece? rook = board.getPieceAt(rookCell);
-
-      if (rook is Rook &&
-          !rook.hasMoved &&
-          board.getPieceAt(Cell(row: kingRow, col: 5)) == null &&
-          board.getPieceAt(Cell(row: kingRow, col: 6)) == null) {
-        // التحقق من أن المربعات التي يمر بها الملك ليست مهددة
-        if (!board.isCellUnderAttack(kingColor, Cell(row: kingRow, col: 5)) &&
-            !board.isCellUnderAttack(kingColor, Cell(row: kingRow, col: 6))) {
-          moves.add(
-            Move(
-              start: kingCell,
-              end: Cell(row: kingRow, col: 6),
-              isCastling: true,
-              movedPiece: King(
-                color: kingColor,
-                type: PieceType.king,
-                hasMoved: true,
-              ),
-              castlingRookFrom: rookCell,
-              castlingRookTo: Cell(row: kingRow, col: 5),
-            ),
-          );
-        }
-      }
-    }
-
-    // الكاستلينج لجهة الملكة (Queen-side Castling)
-    if (board.castlingRights[kingColor]![CastlingSide.queenSide]!) {
-      final Cell rookCell = Cell(row: kingRow, col: 0);
-      final Piece? rook = board.getPieceAt(rookCell);
-
-      if (rook is Rook &&
-          !rook.hasMoved &&
-          board.getPieceAt(Cell(row: kingRow, col: 3)) == null &&
-          board.getPieceAt(Cell(row: kingRow, col: 2)) == null &&
-          board.getPieceAt(Cell(row: kingRow, col: 1)) == null) {
-        // التحقق من أن المربعات التي يمر بها الملك ليست مهددة
-        if (!board.isCellUnderAttack(kingColor, Cell(row: kingRow, col: 3)) &&
-            !board.isCellUnderAttack(kingColor, Cell(row: kingRow, col: 2)) &&
-            !board.isCellUnderAttack(kingColor, Cell(row: kingRow, col: 1))) {
-          moves.add(
-            Move(
-              start: kingCell,
-              end: Cell(row: kingRow, col: 2),
-              isCastling: true,
-              movedPiece: King(
-                color: kingColor,
-                type: PieceType.king,
-                hasMoved: true,
-              ),
-              castlingRookFrom: rookCell,
-              castlingRookTo: Cell(row: kingRow, col: 3),
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  /// دالة مساعدة خاصة لإضافة حركات الـ En Passant بعد التحقق من شرعيتها.
-  void _addEnPassantMoves(
-    List<Move> moves,
-    Cell pawnCell,
-    PieceColor pawnColor,
-    Board board,
-  ) {
-    if (board.enPassantTarget == null) return;
-
-    final int direction = pawnColor == PieceColor.white ? -1 : 1;
-    final int targetRow = pawnCell.row + direction;
-
-    // تحقق من الخلايا المجاورة للبيدق لعملية الـ En Passant
-    final List<Cell> adjacentCells = [
-      Cell(row: pawnCell.row, col: pawnCell.col - 1),
-      Cell(row: pawnCell.row, col: pawnCell.col + 1),
-    ];
-
-    for (final adjacentCell in adjacentCells) {
-      if (adjacentCell.isValid()) {
-        final Piece? adjacentPiece = board.getPieceAt(adjacentCell);
-        if (adjacentPiece is Pawn &&
-            adjacentPiece.color != pawnColor &&
-            board.enPassantTarget ==
-                Cell(row: targetRow, col: adjacentCell.col) &&
-            board.moveHistory.isNotEmpty) {
-          // التحقق مما إذا كانت الحركة الأخيرة هي حركة بيدق مزدوجة للبيدق المستهدف
-          final lastMove = board.moveHistory.last;
-          if (lastMove.isTwoStepPawnMove && lastMove.end == adjacentCell) {
-            moves.add(
-              Move(
-                start: pawnCell,
-                end: board.enPassantTarget!,
-                isEnPassant: true,
-                isCapture: true, // En Passant هو نوع من أنواع الأسر
-                movedPiece: Pawn(
-                  color: pawnColor,
-                  type: PieceType.pawn,
-                  hasMoved: true,
-                ),
-                capturedPiece: board.getPieceAt(board.enPassantTarget!),
-                // enPassantTargetBefore: board.enPassantTarget,
-              ),
-            );
-          }
-        }
-      }
-    }
-  }
-}
-
 /// تطبيق [GameRepository] الذي يحتوي على منطق لعبة الشطرنج الفعلي.
-class GameRepositoryImpl extends GameRepository with GameRepositoryImplMixin {
+class GameRepositoryImpl extends GameRepository {
   Board currentBoard;
   List<Board> _boardHistory = []; // لتتبع تكرار اللوحة
   List<Move> redoStack = []; // لتتبع الحركات التي يمكن التراجع عنها
-  static bool _zobristKeysInitialized = false;
 
+  //
+  // جداول Zobrist Hashing
+  final ZobristHashing _zobristHashing = ZobristHashing();
+
+  // جدول التحويل
   /// مُنشئ لـ [GameRepositoryImpl]. يبدأ اللعبة بلوحة أولية للاعب الأبيض.
   // 'rnbqk2r/pp3ppp/2p2n2/3p2B1/1b1P4/2N2N2/PP2PPPP/R2QKB1R w KQkq - 0 1',
   GameRepositoryImpl() : currentBoard = Board.initial() {
-    _boardHistory.add(currentBoard);
-    if (!_zobristKeysInitialized) {
-      _initializeZobristKeys();
-      _zobristKeysInitialized = true;
+    if (!_zobristHashing.zobristKeysInitialized) {
+      ZobristHashing.initializeZobristKeys();
+      _zobristHashing.zobristKeysInitialized = true;
     }
+    _boardHistory.add(currentBoard);
+    // if (!_zobristKeysInitialized) {
+    //   _initializeZobristKeys();
+    //   _zobristKeysInitialized = true;
+    // }
   }
 
   @override
@@ -167,39 +41,15 @@ class GameRepositoryImpl extends GameRepository with GameRepositoryImplMixin {
     return currentBoard;
   }
 
+  // الحصول على الحركات القانونية للقطعة في الخلية المحددة.
   @override
-  List<Move> getLegalMoves(Cell cell, [Board? boardParameter]) {
-    debugPrint("getLegalMoves");
-    final boardToUse = boardParameter ?? currentBoard;
-    final piece = boardToUse.getPieceAt(cell);
-    if (piece == null || piece.color != boardToUse.currentPlayer) {
-      return []; // لا توجد قطعة أو ليست قطعة اللاعب الحالي
-    }
+  List<Move> getLegalMoves(Cell cell, [Board? boardParameter]) =>
+      ChessLogic.getLegalMoves(cell, boardParameter ?? currentBoard);
 
-    // الحصول على الحركات الأولية للقطعة (بغض النظر عن الكش)
-    final rawMoves = piece.getRawMoves(boardToUse, cell);
-
-    // تصفية الحركات لإزالة تلك التي تضع الملك في كش
-    final legalMoves =
-        rawMoves.where((move) {
-          return !isMoveResultingInCheck(boardToUse, move);
-        }).toList();
-
-    // إضافة حركات الكاستلينج القانونية (يتم التحقق منها هنا بشكل كامل)
-    if (piece.type == PieceType.king) {
-      _addCastlingMoves(legalMoves, cell, piece.color, boardToUse);
-    }
-    // إضافة حركات En Passant القانونية (يتم التحقق منها هنا بشكل كامل)
-    if (piece.type == PieceType.pawn) {
-      _addEnPassantMoves(legalMoves, cell, piece.color, boardToUse);
-    }
-
-    return legalMoves;
-  }
-
+  // تحديث اللوحة الحالية بعد إجراء حركة.
   @override
-  Board makeMove(Move move, [Board? boardParameter]) {
-    Board newBoard = boardParameter ?? currentBoard.copyWithDeepPieces();
+  Board makeMove(Move move) {
+    Board newBoard = currentBoard;
     final Piece? pieceToMove = newBoard.getPieceAt(move.start);
 
     if (pieceToMove == null) {
@@ -208,7 +58,7 @@ class GameRepositoryImpl extends GameRepository with GameRepositoryImplMixin {
     }
     if (pieceToMove.color != newBoard.currentPlayer) {
       debugPrint("خطأ: ليس دور هذا اللاعب ${pieceToMove.color.name} الان ");
-      return currentBoard; // لا تفعل شيئًا إذا لم يكون دور هذا اللاعب
+      return currentBoard; // لا تفعل شيئًا إذا لم يكن دور هذا اللاعب
     }
 
     // تحديث hasMoved للقطعة التي تتحرك
@@ -236,13 +86,13 @@ class GameRepositoryImpl extends GameRepository with GameRepositoryImplMixin {
     if (!isCurrentMoveTwoStepPawnMove) {
       newEnPassantTarget = null;
     }
-    // if (move.isTwoStepPawnMove && pieceToMove.type == PieceType.pawn) {
-    //   final int direction = pieceToMove.color == PieceColor.white ? 1 : -1;
-    //   newEnPassantTarget = Cell(
-    //     row: move.end.row + direction,
-    //     col: move.end.col,
-    //   );
-    // }
+    if (move.isTwoStepPawnMove && pieceToMove.type == PieceType.pawn) {
+      final int direction = pieceToMove.color == PieceColor.white ? 1 : -1;
+      newEnPassantTarget = Cell(
+        row: move.end.row + direction,
+        col: move.end.col,
+      );
+    }
 
     if (move.isEnPassant) {
       final int capturedPawnRow =
@@ -295,7 +145,6 @@ class GameRepositoryImpl extends GameRepository with GameRepositoryImplMixin {
       );
       newBoard = newBoard.placePiece(move.end, promotedPiece);
     }
-
     // تحديث حقوق الكاستلينج بعد حركة الملك أو الرخ
     Map<PieceColor, Map<CastlingSide, bool>> newCastlingRights = Map.from(
       newBoard.castlingRights,
@@ -303,10 +152,14 @@ class GameRepositoryImpl extends GameRepository with GameRepositoryImplMixin {
 
     // إذا تحرك الملك، يفقد حقوق الكاستلينج
     if (pieceToMove.type == PieceType.king) {
-      newCastlingRights[pieceToMove.color] = {
-        CastlingSide.kingSide: false,
-        CastlingSide.queenSide: false,
-      };
+      newCastlingRights =
+          newCastlingRights..update(
+            pieceToMove.color,
+            (value) =>
+                Map.from(value)
+                  ..update(CastlingSide.kingSide, (value) => false)
+                  ..update(CastlingSide.queenSide, (value) => false),
+          );
     }
 
     // إذا تحرك الرخ من موضعه الأصلي، يفقد حقوق الكاستلينج لتلك الجهة
@@ -314,37 +167,89 @@ class GameRepositoryImpl extends GameRepository with GameRepositoryImplMixin {
       if (pieceToMove.color == PieceColor.white) {
         if (move.start == const Cell(row: 7, col: 0)) {
           // رخ أبيض يسار
-          newCastlingRights[PieceColor.white]![CastlingSide.queenSide] = false;
+          newCastlingRights =
+              newCastlingRights..update(
+                PieceColor.white,
+                (value) =>
+                    Map.from(value)
+                      ..update(CastlingSide.queenSide, (value) => false),
+              );
         } else if (move.start == const Cell(row: 7, col: 7)) {
           // رخ أبيض يمين
-          newCastlingRights[PieceColor.white]![CastlingSide.kingSide] = false;
+          newCastlingRights =
+              newCastlingRights..update(
+                PieceColor.white,
+                (value) =>
+                    Map.from(value)
+                      ..update(CastlingSide.kingSide, (value) => false),
+              );
         }
       } else {
         // Black rook
         if (move.start == const Cell(row: 0, col: 0)) {
           // رخ أسود يسار
-          newCastlingRights[PieceColor.black]![CastlingSide.queenSide] = false;
+          newCastlingRights =
+              newCastlingRights..update(
+                PieceColor.black,
+                (value) =>
+                    Map.from(value)
+                      ..update(CastlingSide.queenSide, (value) => false),
+              );
         } else if (move.start == const Cell(row: 0, col: 7)) {
           // رخ أسود يمين
-          newCastlingRights[PieceColor.black]![CastlingSide.kingSide] = false;
+          newCastlingRights =
+              newCastlingRights..update(
+                PieceColor.black,
+                (value) =>
+                    Map.from(value)
+                      ..update(CastlingSide.kingSide, (value) => false),
+              );
         }
       }
     }
     // إذا تم أسر الرخ، يفقد حقوق الكاستلينج للخصم لتلك الجهة
     if (move.isCapture) {
       // تحقق من الرخ الذي تم أسره (إذا كان رخ)
-      if (move.end == const Cell(row: 0, col: 0)) {
+      if (move.end == const Cell(row: 0, col: 0) &&
+          newBoard.getPieceAt(move.end)?.type == PieceType.rook) {
         // رخ أسود يسار
-        newCastlingRights[PieceColor.black]![CastlingSide.queenSide] = false;
-      } else if (move.end == const Cell(row: 0, col: 7)) {
+        newCastlingRights =
+            newCastlingRights..update(
+              PieceColor.black,
+              (value) =>
+                  Map.from(value)
+                    ..update(CastlingSide.queenSide, (value) => false),
+            );
+      } else if (move.end == const Cell(row: 0, col: 7) &&
+          newBoard.getPieceAt(move.end)?.type == PieceType.rook) {
         // رخ أسود يمين
-        newCastlingRights[PieceColor.black]![CastlingSide.kingSide] = false;
-      } else if (move.end == const Cell(row: 7, col: 0)) {
+        newCastlingRights =
+            newCastlingRights..update(
+              PieceColor.black,
+              (value) =>
+                  Map.from(value)
+                    ..update(CastlingSide.kingSide, (value) => false),
+            );
+      } else if (move.end == const Cell(row: 7, col: 0) &&
+          newBoard.getPieceAt(move.end)?.type == PieceType.rook) {
         // رخ أبيض يسار
-        newCastlingRights[PieceColor.white]![CastlingSide.queenSide] = false;
-      } else if (move.end == const Cell(row: 7, col: 7)) {
+        newCastlingRights =
+            newCastlingRights..update(
+              PieceColor.white,
+              (value) =>
+                  Map.from(value)
+                    ..update(CastlingSide.queenSide, (value) => false),
+            );
+      } else if (move.end == const Cell(row: 7, col: 7) &&
+          newBoard.getPieceAt(move.end)?.type == PieceType.rook) {
         // رخ أبيض يمين
-        newCastlingRights[PieceColor.white]![CastlingSide.kingSide] = false;
+        newCastlingRights =
+            newCastlingRights..update(
+              PieceColor.white,
+              (value) =>
+                  Map.from(value)
+                    ..update(CastlingSide.kingSide, (value) => false),
+            );
       }
     }
 
@@ -380,6 +285,7 @@ class GameRepositoryImpl extends GameRepository with GameRepositoryImplMixin {
       kingPositions: newKingPositions,
       halfMoveClock: newHalfMoveClock,
       fullMoveNumber: newFullMoveNumber,
+      zobristKey: ZobristHashing.updateZobristKeyAfterMove(newBoard, move),
     );
 
     currentBoard = newBoard.copyWith(positionHistory: [newBoard.toFenString()]);
@@ -419,26 +325,8 @@ class GameRepositoryImpl extends GameRepository with GameRepositoryImplMixin {
   }
 
   @override
-  List<Move> getAllLegalMovesForCurrentPlayer(Board board) {
-    // debugPrint("getAllLegalMovesForCurrentPlayer");
-
-    final List<Move> allLegalMoves = [];
-    final currentPlayerColor = board.currentPlayer;
-
-    for (int r = 0; r < 8; r++) {
-      for (int c = 0; c < 8; c++) {
-        final currentCell = Cell(row: r, col: c);
-        final piece = board.getPieceAt(currentCell);
-        if (piece != null && piece.color == currentPlayerColor) {
-          final legalmoves = getLegalMoves(currentCell, board);
-          if (legalmoves.isNotEmpty) {
-            allLegalMoves.addAll(legalmoves);
-          }
-        }
-      }
-    }
-    return allLegalMoves;
-  }
+  List<Move> getAllLegalMovesForCurrentPlayer(Board board) =>
+      ChessLogic.getAllLegalMovesForCurrentPlayer(board);
 
   @override
   bool hasAnyLegalMoves(PieceColor playerColor, [Board? boardParameter]) {
@@ -527,26 +415,46 @@ class GameRepositoryImpl extends GameRepository with GameRepositoryImplMixin {
   /// العمق الأقصى لـ Minimax.
   /// (يمكن زيادته للحصول على AI أقوى، ولكنه يزيد من وقت المعالجة).
   // static const int _maxMinimaxDepth = 3; // مثال: 3 حركات للأمام
-
   @override
   Future<Move?> getAiMove(
     Board board,
     PieceColor aiPlayerColor,
     int aiDepth,
   ) async {
-    // return findBestMove(board, aiDepth);
-    List<Move> legalMoves = board.getAllLegalMovesForCurrentPlayer();
-    Move? bestMove;
-    int bestValue = -10000;
+    i = 0; // Reset the counter for each call  final int zobristKey = board.zobristKey;
+    final int zobristKey = board.zobristKey;
 
-    for (Move move in legalMoves) {
-      Board simulatedBoard = board.simulateMove(move);
-      // Use alpha-beta pruning to evaluate the move
-      int moveValue = await alphaBeta(
-        simulatedBoard,
+    if (ZobristHashing.transpositionTable.containsKey(zobristKey)) {
+      final entry = ZobristHashing.transpositionTable[zobristKey]!;
+      if (entry.bestMove != null) {
+        // return entry.bestMove; // إذا كان هناك نتيجة مخزنة، استخدمها
+      }
+    }
+    List<Move> moves = board.getAllLegalMovesForCurrentPlayer();
+
+    // 3. ترتيب الحركات: ضع أفضل حركة مخزنة أولاً
+    _sortMoves(moves, board);
+    // هذا يزيد من كفاءة تقليم ألفا-بيتا
+    if (ZobristHashing.transpositionTable.containsKey(zobristKey) &&
+        ZobristHashing.transpositionTable[zobristKey]!.bestMove != null) {
+      final bestMoveFromTable =
+          ZobristHashing.transpositionTable[zobristKey]!.bestMove!;
+      // ضع أفضل حركة في بداية القائمة
+      moves.remove(bestMoveFromTable);
+      moves.insert(0, bestMoveFromTable);
+    }
+    Move? bestMove;
+    int bestValue = -1000000; // قيمة أولية صغيرة جداً
+    // قم بضبط قيم ألفا وبيتا الأولية للبحث الأولي
+    int alpha = -1000000;
+    int beta = 1000000;
+    for (var move in moves) {
+      final newBoard = board.simulateMove(move);
+      final moveValue = await alphaBeta(
+        newBoard,
         aiDepth - 1,
-        -10000,
-        10000,
+        alpha,
+        beta,
         false,
       );
 
@@ -554,8 +462,20 @@ class GameRepositoryImpl extends GameRepository with GameRepositoryImplMixin {
         bestValue = moveValue;
         bestMove = move;
       }
-    }
 
+      // تحديث alpha بعد كل حركة، لأن getAiMove تعمل كلاعب معظّم
+      alpha = max(alpha, bestValue);
+      // إذا حدث تقليم هنا، يمكننا الخروج مبكراً
+      if (beta <= alpha) break;
+    }
+    // 4. تخزين النتيجة النهائية وأفضل حركة في جدول التحويل
+    // هذا ضروري لتخزين النتيجة وأفضل حركة في جدول التحويل عند العمق الأقصى
+    ZobristHashing.transpositionTable[zobristKey] = TranspositionEntry(
+      score: bestValue,
+      depth: aiDepth,
+      type: NodeType.exact,
+      bestMove: bestMove,
+    );
     return bestMove;
   }
 
@@ -564,121 +484,134 @@ class GameRepositoryImpl extends GameRepository with GameRepositoryImplMixin {
     int depth,
     int alpha,
     int beta,
-
     bool isMaximizing,
   ) async {
+    i++; // Increment the counter for each call
     if (depth == 0 || board.isGameOver()) {
       return board.evaluateBoard();
     }
+    // 2. حساب مفتاح Zobrist للموقف الحالي
+    final int zobristKey = board.zobristKey;
 
+    // 3. البحث في جدول التحويل
+    // هذا يسمح للخوارزمية باستخدام النتائج المحسوبة مسبقًا
+    if (ZobristHashing.transpositionTable.containsKey(zobristKey)) {
+      final entry = ZobristHashing.transpositionTable[zobristKey]!;
+
+      // إذا كان العمق المخزن أكبر من أو يساوي العمق الحالي، يمكننا استخدام النتيجة
+      if (entry.depth >= depth) {
+        if (entry.type == NodeType.exact) {
+          //debugprint("Node type: Exact");
+          return entry.score; // النتيجة دقيقة، أعدها مباشرة
+        }
+        if (entry.type == NodeType.alpha) {
+          //debugprint("Node type: Alpha");
+          // النتيجة هي حد أدنى. إذا كانت أعلى من ألفا الحالي، حدث ألفا
+          alpha = max(alpha, entry.score);
+        }
+        if (entry.type == NodeType.beta) {
+          // //debugprint("Node type: Beta");
+          // النتيجة هي حد أقصى. إذا كانت أقل من بيتا الحالي، حدث بيتا
+          beta = min(beta, entry.score);
+        }
+        // إذا كان هناك تقليم محتمل بناءً على القيم المخزنة، قم بالتقليم
+        if (alpha >= beta) {
+          return entry.score;
+        }
+      }
+    }
     List<Move> legalMoves = board.getAllLegalMovesForCurrentPlayer();
+    _sortMoves(legalMoves, board);
+    // 5. ترتيب الحركات (لتحسين أداء ألفا-بيتا)
+    // أفضل الحركات يتم فحصها أولاً، مما يزيد من فرص التقليم
+    // نستخدم أفضل حركة مخزنة في جدول التحويل كأول خيار إذا كانت موجودة
+    if (ZobristHashing.transpositionTable.containsKey(zobristKey) &&
+        ZobristHashing.transpositionTable[zobristKey]!.bestMove != null) {
+      final bestMoveFromTable =
+          ZobristHashing.transpositionTable[zobristKey]!.bestMove!;
+      // ضع أفضل حركة في بداية القائمة
+      legalMoves.remove(bestMoveFromTable);
+      legalMoves.insert(0, bestMoveFromTable);
+    }
+    int bestValue;
+    Move? bestMove;
+    NodeType nodeType;
 
     if (isMaximizing) {
-      int bestValue = -10000;
+      bestValue = -1000000;
       for (Move move in legalMoves) {
         Board simulatedBoard = board.simulateMove(move);
-
         int moveValue = await alphaBeta(
           simulatedBoard,
-
           depth - 1,
-
           alpha,
-
           beta,
-
           false,
         );
-
-        bestValue = max(bestValue, moveValue);
-
-        alpha = max(alpha, moveValue);
-
-        if (beta <= alpha) {
-          break; // Beta cut-off
+        if (moveValue > bestValue) {
+          bestValue = moveValue;
+          bestMove = move;
         }
+
+        alpha = max(alpha, bestValue); // تم التصحيح لاستخدام bestValue
+        if (beta <= alpha) break; // Beta cut-off
       }
 
-      return bestValue;
+      // تحديد نوع العقدة
+      if (bestValue <= alpha) {
+        // //debugprint("bestValue <= alpha");
+        nodeType = NodeType.beta; // القيمة هي حد أقصى (حدث تقليم)
+      } else if (bestValue >= beta) {
+        //debugprint("bestValue >= beta");
+        nodeType = NodeType.alpha; // القيمة هي حد أدنى (حدث تقليم)
+      } else {
+        //debugprint("bestValue == exact");
+        nodeType = NodeType.exact; // القيمة دقيقة
+      }
     } else {
-      int bestValue = 10000;
-
+      bestValue = 10000;
       for (Move move in legalMoves) {
         Board simulatedBoard = board.simulateMove(move);
 
         int moveValue = await alphaBeta(
           simulatedBoard,
-
           depth - 1,
-
           alpha,
-
           beta,
-
           true,
         );
-
-        bestValue = min(bestValue, moveValue);
-
-        beta = min(beta, moveValue);
-
-        if (beta <= alpha) {
-          break; // Alpha cut-off
+        if (moveValue < bestValue) {
+          bestValue = moveValue;
+          bestMove = move;
         }
-      }
 
-      return bestValue;
+        beta = min(beta, bestValue); // تم التصحيح لاستخدام bestValue
+        if (beta <= alpha) break; // Alpha cut-off
+      }
+      // تحديد نوع العقدة
+      if (bestValue <= alpha) {
+        // //debugprint("bestValue <= alpha");
+        nodeType = NodeType.beta; // القيمة هي حد أقصى (حدث تقليم)
+      } else if (bestValue >= beta) {
+        //debugprint("bestValue >= beta");
+        nodeType = NodeType.alpha; // القيمة هي حد أدنى (حدث تقليم)
+      } else {
+        //debugprint("bestValue == exact");
+        nodeType = NodeType.exact; // القيمة دقيقة
+      }
     }
+    // 8. تخزين النتيجة وأفضل حركة في جدول التحويل
+    ZobristHashing.transpositionTable[zobristKey] = TranspositionEntry(
+      score: bestValue,
+      depth: depth,
+      type: nodeType,
+      bestMove: bestMove,
+    );
+
+    return bestValue;
   }
 
   static int i = 0;
-
-  /// تنفيذ خوارزمية Minimax مع تقليم ألفا-بيتا.
-  /// [board]: اللوحة الحالية.
-  /// [depth]: العمق المتبقي للبحث.
-  /// [maximizingPlayer]: صحيح إذا كان اللاعب الحالي هو لاعب التعظيم (AI).
-  /// [aiPlayerColor]: لون قطع الذكاء الاصطناعي.
-  /// [alpha]: أفضل قيمة (الحد الأدنى) تم العثور عليها حتى الآن في مسار لاعب التعظيم.
-  /// [beta]: أفضل قيمة (الحد الأقصى) تم العثور عليها حتى الآن في مسار لاعب التقليل.
-
-  /// دالة مساعدة للحصول على جميع الحركات القانونية للوحة معينة ولون لاعب معين.
-  /// هذه نسخة من `getAllLegalMovesForCurrentPlayer` ولكنها تعمل على لوحة مُعطاة.
-  List<Move> _getAllLegalMovesForBoard(Board board, PieceColor playerColor) {
-    final List<Move> allLegalMoves = [];
-
-    for (int r = 0; r < 8; r++) {
-      for (int c = 0; c < 8; c++) {
-        final currentCell = Cell(row: r, col: c);
-        final piece = board.getPieceAt(currentCell);
-        if (piece != null && piece.color == playerColor) {
-          allLegalMoves.addAll(
-            getLegalMoves(currentCell, board),
-          ); // استدعاء مع اللوحة
-        }
-      }
-    }
-    return allLegalMoves;
-  }
-
-  @override
-  Future<Move?> findBestMove(Board board, int depth) async {
-    // استخدم compute لتشغيل البحث في معالج منفصل لتجنب تجميد واجهة المستخدم.
-    // Use compute to run the search in an isolated processor to avoid freezing the UI.
-    // يتم تمرير نسخة عميقة من اللوحة لضمان عدم وجود مشاكل في تزامن البيانات.
-    // A deep copy of the board is passed to ensure no data synchronization issues.
-    // return compute(
-    //   _searchBestMove,
-    //   SearchParams(board.copyWithDeepPieces(), depth),
-    // );
-    return _searchBestMove(SearchParams(board.copyWithDeepPieces(), depth));
-  }
-
-  // دالة مساعدة لتشغيلها في معالج منفصل
-  // Helper function to be run in an isolated processor
-  Move? _searchBestMove(SearchParams params) {
-    // final ai = _AILogicClass(params.board);
-    return minimaxRoot(params);
-  }
 }
 
 extension AiLogic on GameRepositoryImpl {
@@ -698,7 +631,7 @@ extension AiLogic on GameRepositoryImpl {
     aIcurrentPlayer = board.currentPlayer;
     Move? bestMove;
     int bestValue = -99999;
-    print("bestMove $bestMove myint i = $i ");
+    debugPrint("bestMove $bestMove myint i = $i ");
     // الحصول على جميع الحركات القانونية للاعب الحالي.
     // Get all legal moves for the current player.
     final List<Move> legalMoves = getAllLegalMovesForCurrentPlayer(board);
@@ -747,7 +680,7 @@ extension AiLogic on GameRepositoryImpl {
         bestMove = move;
       }
     }
-    print("bestMove $bestMove myint i = $i ");
+    debugPrint("bestMove $bestMove myint i = $i ");
     // i = 0;
     return bestMove;
   }
@@ -769,7 +702,7 @@ extension AiLogic on GameRepositoryImpl {
     // القاعدة الأساسية: إذا وصل العمق إلى صفر أو كانت اللعبة قد انتهت (كش ملك/تعادل).
     // Base case: If depth is zero or the game is over (checkmate/draw).
     if (depth == 0 || _isGameOver(board)) {
-      return _evaluateBoard(board, currentPlayer);
+      return evaluateBoard(board, currentPlayer);
     }
 
     // اللاعب الذي يحاول تعظيم نتيجته.
@@ -777,7 +710,7 @@ extension AiLogic on GameRepositoryImpl {
     if (currentPlayer == aIcurrentPlayer) {
       // AI's turn
       int maxEval = -99999;
-      final List<Move> legalMoves = _getLegalMoves(board, currentPlayer);
+      final List<Move> legalMoves = getAllLegalMovesForCurrentPlayer(board);
       _sortMoves(legalMoves, board);
 
       for (final move in legalMoves) {
@@ -814,7 +747,7 @@ extension AiLogic on GameRepositoryImpl {
     else {
       // Opponent's turn
       int minEval = 99999;
-      final List<Move> legalMoves = _getLegalMoves(board, currentPlayer);
+      final List<Move> legalMoves = getAllLegalMovesForCurrentPlayer(board);
       _sortMoves(legalMoves, board);
 
       for (final move in legalMoves) {
@@ -849,36 +782,6 @@ extension AiLogic on GameRepositoryImpl {
     }
   }
 
-  /// [_getLegalMoves]
-  /// تُرجع قائمة بجميع الحركات القانونية للاعب الحالي على اللوحة المعطاة.
-  /// Returns a list of all legal moves for the current player on the given board.
-  List<Move> _getLegalMoves(Board board, PieceColor playerColor) {
-    // debugPrint("_getLegalMoves");
-
-    final List<Move> legalMoves = [];
-    for (int r = 0; r < 8; r++) {
-      for (int c = 0; c < 8; c++) {
-        final currentCell = Cell(row: r, col: c);
-        final piece = board.getPieceAt(currentCell);
-        if (piece != null && piece.color == playerColor) {
-          final rawMoves = piece.getRawMoves(board, currentCell);
-          for (final move in rawMoves) {
-            // تحقق من شرعية الحركة (لا تضع الملك في كش)
-            // Check move legality (does not put king in check)
-            final simulatedBoard = simulateMove(
-              board.copyWithDeepPieces(),
-              move,
-            );
-            if (!simulatedBoard.isKingInCheck(playerColor)) {
-              legalMoves.add(move);
-            }
-          }
-        }
-      }
-    }
-    return legalMoves;
-  }
-
   bool _isGameOver(Board board) {
     // debugPrint("_isGameOver");
 
@@ -889,99 +792,81 @@ extension AiLogic on GameRepositoryImpl {
   }
 }
 
-extension ZobristHashing on GameRepositoryImpl {
-  static final Map<int, TranspositionEntry> _transpositionTable = {};
+// extension ZobristHashingImp on GameRepositoryImpl {
+//   void _initializeZobristKeys() {
+//     random = Random(42); // استخدام seed ثابت لأغراض الاختبار
+//     // تهيئة جدول zobrist بـ أرقام عشوائية
 
-  // جداول Zobrist Hashing
-  // يتم تهيئتها مرة واحدة فقط عند بدء التطبيق أو إنشاء الـ repository.
-  static final Map<PieceType, Map<PieceColor, List<List<int>>>>
-  _zobristPieceKeys = {};
-  static final Map<PieceColor, int> _zobristSideToMoveKeys = {};
-  static final Map<CastlingSide, Map<PieceColor, int>> _zobristCastlingKeys =
-      {};
-  static final Map<int, int> _zobristEnPassantKeys = {}; // 8 قيم لـ a-h
+//     // مفاتيح القطع والمربعات
+//     for (var type in PieceType.values) {
+//       _zobristPieceKeys[type] = {};
+//       for (var color in PieceColor.values) {
+//         _zobristPieceKeys[type]![color] = List.generate(
+//           8,
+//           (_) => List.generate(8, (_) => random.nextInt(0xFFFFFFFF)),
+//         );
+//       }
+//     }
+//     //  1^
+//     //
+//     //
+//     // مفاتيح الدور (للاعب الأبيض والأسود)
+//     _zobristSideToMoveKeys[PieceColor.white] = random.nextInt(0xFFFFFFFF);
+//     _zobristSideToMoveKeys[PieceColor.black] = random.nextInt(0xFFFFFFFF);
 
-  void _initializeZobristKeys() {
-    final Random random = Random(42); // استخدام seed ثابت لأغراض الاختبار
+//     // مفاتيح حقوق التبييت
+//     _zobristCastlingKeys[PieceColor.white] = {
+//       CastlingSide.kingSide: random.nextInt(0xFFFFFFFF),
+//       CastlingSide.queenSide: random.nextInt(0xFFFFFFFF),
+//     };
+//     _zobristCastlingKeys[PieceColor.black] = {
+//       CastlingSide.kingSide: random.nextInt(0xFFFFFFFF),
+//       CastlingSide.queenSide: random.nextInt(0xFFFFFFFF),
+//     };
 
-    // مفاتيح القطع والمربعات
-    for (var type in PieceType.values) {
-      _zobristPieceKeys[type] = {};
-      for (var color in PieceColor.values) {
-        _zobristPieceKeys[type]![color] = List.generate(
-          8,
-          (_) => List.generate(8, (_) => random.nextInt(0xFFFFFFFF)),
-        );
-      }
-    }
+//     // مفاتيح الأسر بالمرور (لـ 8 أعمدة)
+//     for (int col = 0; col < 8; col++) {
+//       _zobristEnPassantKeys[col] = random.nextInt(0xFFFFFFFF);
+//     }
+//   }
 
-    // مفاتيح الدور (للاعب الأبيض والأسود)
-    _zobristSideToMoveKeys[PieceColor.white] = random.nextInt(0xFFFFFFFF);
-    _zobristSideToMoveKeys[PieceColor.black] = random.nextInt(0xFFFFFFFF);
+//   /// يحسب مفتاح Zobrist لموقف اللوحة الحالي.
+//   int _calculateZobristKey(Board board) {
+//     int hash = 0;
 
-    // مفاتيح حقوق التبييت
-    _zobristCastlingKeys[CastlingSide.kingSide] = {
-      PieceColor.white: random.nextInt(0xFFFFFFFF),
-      PieceColor.black: random.nextInt(0xFFFFFFFF),
-    };
-    _zobristCastlingKeys[CastlingSide.queenSide] = {
-      PieceColor.white: random.nextInt(0xFFFFFFFF),
-      PieceColor.black: random.nextInt(0xFFFFFFFF),
-    };
+//     // 1. القطع في المربعات
+//     for (int r = 0; r < 8; r++) {
+//       for (int c = 0; c < 8; c++) {
+//         final piece = board.squares[r][c];
+//         if (piece != null) {
+//           hash ^= _zobristPieceKeys[piece.type]![piece.color]![r][c];
+//         }
+//       }
+//     }
 
-    // مفاتيح الأسر بالمرور (لـ 8 أعمدة)
-    for (int col = 0; col < 8; col++) {
-      _zobristEnPassantKeys[col] = random.nextInt(0xFFFFFFFF);
-    }
-  }
+//     // 2. الدور
+//     hash ^= _zobristSideToMoveKeys[board.currentPlayer]!;
 
-  /// يحسب مفتاح Zobrist لموقف اللوحة الحالي.
-  int _calculateZobristKey(Board board) {
-    int hash = 0;
+//     // 3. حقوق التبييت
+//     if (board.castlingRights[PieceColor.white]![CastlingSide.kingSide]!) {
+//       hash ^= _zobristCastlingKeys[PieceColor.white]![CastlingSide.kingSide]!;
+//     }
+//     if (board.castlingRights[PieceColor.white]![CastlingSide.queenSide]!) {
+//       hash ^= _zobristCastlingKeys[PieceColor.white]![CastlingSide.queenSide]!;
+//     }
+//     if (board.castlingRights[PieceColor.black]![CastlingSide.kingSide]!) {
+//       hash ^= _zobristCastlingKeys[PieceColor.black]![CastlingSide.kingSide]!;
+//     }
+//     if (board.castlingRights[PieceColor.black]![CastlingSide.queenSide]!) {
+//       hash ^= _zobristCastlingKeys[PieceColor.black]![CastlingSide.queenSide]!;
+//     }
 
-    // 1. القطع في المربعات
-    for (int r = 0; r < 8; r++) {
-      for (int c = 0; c < 8; c++) {
-        final piece = board.squares[r][c];
-        if (piece != null) {
-          hash ^= _zobristPieceKeys[piece.type]![piece.color]![r][c];
-        }
-      }
-    }
+//     ///
+//     // 4. هدف الأسر بالمرور
+//     if (board.enPassantTarget != null) {
+//       hash ^= _zobristEnPassantKeys[board.enPassantTarget!.col]!;
+//     }
 
-    // 2. الدور
-    hash ^= _zobristSideToMoveKeys[board.currentPlayer]!;
-
-    // 3. حقوق التبييت
-    if (board.castlingRights[PieceColor.white]![CastlingSide.kingSide]!) {
-      hash ^= _zobristCastlingKeys[CastlingSide.kingSide]![PieceColor.white]!;
-    }
-    if (board.castlingRights[PieceColor.white]![CastlingSide.queenSide]!) {
-      hash ^= _zobristCastlingKeys[CastlingSide.queenSide]![PieceColor.white]!;
-    }
-    if (board.castlingRights[PieceColor.black]![CastlingSide.kingSide]!) {
-      hash ^= _zobristCastlingKeys[CastlingSide.kingSide]![PieceColor.black]!;
-    }
-    if (board.castlingRights[PieceColor.black]![CastlingSide.queenSide]!) {
-      hash ^= _zobristCastlingKeys[CastlingSide.queenSide]![PieceColor.black]!;
-    }
-
-    ///
-    // 4. هدف الأسر بالمرور
-    if (board.enPassantTarget != null) {
-      hash ^= _zobristEnPassantKeys[board.enPassantTarget!.col]!;
-    }
-
-    return hash;
-  }
-}
-
-// تعريف بسيط لمدخل جدول التحويل (يمكن أن يكون أكثر تعقيداً)
-// يجب أن يحتوي على ما يكفي من المعلومات لاتخاذ قرار جيد.
-class TranspositionEntry {
-  final int score;
-  final int depth; // العمق الذي تم عنده حساب هذه النتيجة
-  final NodeType type; // نوع العقدة: EXACT, ALPHA, BETA
-
-  TranspositionEntry(this.score, this.depth, this.type);
-}
+//     return hash;
+//   }
+// }

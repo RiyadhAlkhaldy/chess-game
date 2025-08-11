@@ -1,5 +1,7 @@
+import 'package:chess_gemini_2/domain/repositories/zobrist_hashing.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import '../../data/chess_logic.dart';
 import '../repositories/simulate_move.dart';
 import '../repositories/zobrist_hasher.dart';
 import 'cell.dart';
@@ -44,8 +46,9 @@ abstract class Board with _$Board {
     // إضافة لسجل وضعيات اللوحة للتحقق من التكرار الثلاثي
     // A list of FEN strings or a similar unique board state representation
     @Default([]) List<String> positionHistory,
-    @Default(0) int zobristKey,
+    required int zobristKey,
   }) = _Board;
+  static final ZobristHasher hasher = ZobristHasher();
 
   /// Factory constructor to set up the initial state of a chess board.
   factory Board.initial() {
@@ -131,12 +134,16 @@ abstract class Board with _$Board {
       0,
       1,
     );
-    return Board(
+
+    final Board initialBoard = Board(
       squares: initialSquares,
       kingPositions: initialKingPositions,
       currentPlayer: PieceColor.white,
       positionHistory: [initialFen], // Add initial position to history
+      zobristKey: 0, // Zobrist key for the board state
     );
+    final int initialKey = ZobristHashing.calculateZobristKey(initialBoard);
+    return initialBoard.copyWith(zobristKey: initialKey);
   }
 
   /// Builds a Board object from a FEN (Forsyth-Edwards Notation) string.
@@ -349,17 +356,15 @@ abstract class Board with _$Board {
       halfMoveClock: halfMoveClock,
       fullMoveNumber: fullMoveNumber,
       positionHistory: [initialFen], // Add the initial FEN to history
-      // أضف FEN الأولي إلى السجل
+      zobristKey: 0, // Zobrist key for the board state
     );
   }
   factory Board.fromJson(Map<String, dynamic> json) => _$BoardFromJson(json);
 }
 
-extension ZobristHashing on Board {
-  static final ZobristHasher _hasher = ZobristHasher();
-
+extension ZobristHashingBoard on Board {
   int computeZobristHash() {
-    return _hasher.computeHash(squares, currentPlayer == PieceColor.white);
+    return Board.hasher.computeHash(this, currentPlayer == PieceColor.white);
   }
 
   int get zobristKey => computeZobristHash();
@@ -399,6 +404,7 @@ extension OnBoard on Board {
       fullMoveNumber: fullMoveNumber,
       halfMoveClock: halfMoveClock,
       positionHistory: newPositionHistory, // استخدم النسخة العميقة
+      zobristKey: zobristKey, // إعادة حساب المفتاح Zobrist
     );
   }
 
@@ -590,194 +596,15 @@ extension WithBoard on Board {
     return score;
   }
 
-  bool isMoveResultingInCheck(Board board, Move move) {
-    final simulatedBoard = simulateMove(move, board);
-    return simulatedBoard.isKingInCheck(board.currentPlayer);
-  }
-
   Board simulateMove(Move move, [Board? boardParameter]) {
     return SimulateMove.simulateMove(boardParameter ?? this, move);
   }
 
-  List<Move> getAllLegalMovesForCurrentPlayer([Board? boardParameter]) {
-    final board = boardParameter ?? this;
-    // debugPrint("getAllLegalMovesForCurrentPlayer");
+  List<Move> getAllLegalMovesForCurrentPlayer([Board? boardParameter]) =>
+      ChessLogic.getAllLegalMovesForCurrentPlayer(boardParameter ?? this);
 
-    final List<Move> allLegalMoves = [];
-    final currentPlayerColor = board.currentPlayer;
-
-    for (int r = 0; r < 8; r++) {
-      for (int c = 0; c < 8; c++) {
-        final currentCell = Cell(row: r, col: c);
-        final piece = board.getPieceAt(currentCell);
-        if (piece != null && piece.color == currentPlayerColor) {
-          final legalmoves = getLegalMoves(currentCell, board);
-          if (legalmoves.isNotEmpty) {
-            allLegalMoves.addAll(legalmoves);
-          }
-        }
-      }
-    }
-    return allLegalMoves;
-  }
-
-  List<Move> getLegalMoves(Cell cell, [Board? boardParameter]) {
-    final boardToUse = boardParameter ?? this;
-    final piece = boardToUse.getPieceAt(cell);
-    if (piece == null || piece.color != boardToUse.currentPlayer) {
-      return []; // لا توجد قطعة أو ليست قطعة اللاعب الحالي
-    }
-
-    // الحصول على الحركات الأولية للقطعة (بغض النظر عن الكش)
-    final rawMoves = piece.getRawMoves(boardToUse, cell);
-
-    // تصفية الحركات لإزالة تلك التي تضع الملك في كش
-    final legalMoves =
-        rawMoves.where((move) {
-          return !isMoveResultingInCheck(boardToUse, move);
-        }).toList();
-
-    // إضافة حركات الكاستلينج القانونية (يتم التحقق منها هنا بشكل كامل)
-    if (piece.type == PieceType.king) {
-      _addCastlingMoves(legalMoves, cell, piece.color, boardToUse);
-    }
-    // إضافة حركات En Passant القانونية (يتم التحقق منها هنا بشكل كامل)
-    if (piece.type == PieceType.pawn) {
-      _addEnPassantMoves(legalMoves, cell, piece.color, boardToUse);
-    }
-
-    return legalMoves;
-  }
-
-  /// دالة مساعدة خاصة لإضافة حركات الكاستلينج بعد التحقق من شرعيتها.
-  /// الكاستلينج له قواعد خاصة لا يمكن التحقق منها فقط من خلال getRawMoves.
-  void _addCastlingMoves(
-    List<Move> moves,
-    Cell kingCell,
-    PieceColor kingColor, [
-    Board? boardParameter,
-  ]) {
-    final board = boardParameter ?? this;
-    if (kingColor != board.currentPlayer) return;
-    if (board.isKingInCheck(kingColor)) {
-      return; // لا يمكن الكاستلينج إذا كان الملك في كش
-    }
-
-    final int kingRow = kingColor == PieceColor.white ? 7 : 0;
-
-    // الكاستلينج لجهة الملك (King-side Castling)
-    if (board.castlingRights[kingColor]![CastlingSide.kingSide]!) {
-      final Cell rookCell = Cell(row: kingRow, col: 7);
-      final Piece? rook = board.getPieceAt(rookCell);
-
-      if (rook is Rook &&
-          !rook.hasMoved &&
-          board.getPieceAt(Cell(row: kingRow, col: 5)) == null &&
-          board.getPieceAt(Cell(row: kingRow, col: 6)) == null) {
-        // التحقق من أن المربعات التي يمر بها الملك ليست مهددة
-        if (!board.isCellUnderAttack(kingColor, Cell(row: kingRow, col: 5)) &&
-            !board.isCellUnderAttack(kingColor, Cell(row: kingRow, col: 6))) {
-          moves.add(
-            Move(
-              start: kingCell,
-              end: Cell(row: kingRow, col: 6),
-              isCastling: true,
-              movedPiece: King(
-                color: kingColor,
-                type: PieceType.king,
-                hasMoved: true,
-              ),
-              castlingRookFrom: rookCell,
-              castlingRookTo: Cell(row: kingRow, col: 5),
-            ),
-          );
-        }
-      }
-    }
-
-    // الكاستلينج لجهة الملكة (Queen-side Castling)
-    if (board.castlingRights[kingColor]![CastlingSide.queenSide]!) {
-      final Cell rookCell = Cell(row: kingRow, col: 0);
-      final Piece? rook = board.getPieceAt(rookCell);
-
-      if (rook is Rook &&
-          !rook.hasMoved &&
-          board.getPieceAt(Cell(row: kingRow, col: 3)) == null &&
-          board.getPieceAt(Cell(row: kingRow, col: 2)) == null &&
-          board.getPieceAt(Cell(row: kingRow, col: 1)) == null) {
-        // التحقق من أن المربعات التي يمر بها الملك ليست مهددة
-        if (!board.isCellUnderAttack(kingColor, Cell(row: kingRow, col: 3)) &&
-            !board.isCellUnderAttack(kingColor, Cell(row: kingRow, col: 2)) &&
-            !board.isCellUnderAttack(kingColor, Cell(row: kingRow, col: 1))) {
-          moves.add(
-            Move(
-              start: kingCell,
-              end: Cell(row: kingRow, col: 2),
-              isCastling: true,
-              movedPiece: King(
-                color: kingColor,
-                type: PieceType.king,
-                hasMoved: true,
-              ),
-              castlingRookFrom: rookCell,
-              castlingRookTo: Cell(row: kingRow, col: 3),
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  /// دالة مساعدة خاصة لإضافة حركات الـ En Passant بعد التحقق من شرعيتها.
-  void _addEnPassantMoves(
-    List<Move> moves,
-    Cell pawnCell,
-    PieceColor pawnColor, [
-    Board? boardParameter,
-  ]) {
-    final board = boardParameter ?? this;
-    if (board.enPassantTarget == null) return;
-
-    final int direction = pawnColor == PieceColor.white ? -1 : 1;
-    final int targetRow = pawnCell.row + direction;
-
-    // تحقق من الخلايا المجاورة للبيدق لعملية الـ En Passant
-    final List<Cell> adjacentCells = [
-      Cell(row: pawnCell.row, col: pawnCell.col - 1),
-      Cell(row: pawnCell.row, col: pawnCell.col + 1),
-    ];
-
-    for (final adjacentCell in adjacentCells) {
-      if (adjacentCell.isValid()) {
-        final Piece? adjacentPiece = board.getPieceAt(adjacentCell);
-        if (adjacentPiece is Pawn &&
-            adjacentPiece.color != pawnColor &&
-            board.enPassantTarget ==
-                Cell(row: targetRow, col: adjacentCell.col) &&
-            board.moveHistory.isNotEmpty) {
-          // التحقق مما إذا كانت الحركة الأخيرة هي حركة بيدق مزدوجة للبيدق المستهدف
-          final lastMove = board.moveHistory.last;
-          if (lastMove.isTwoStepPawnMove && lastMove.end == adjacentCell) {
-            moves.add(
-              Move(
-                start: pawnCell,
-                end: board.enPassantTarget!,
-                isEnPassant: true,
-                isCapture: true, // En Passant هو نوع من أنواع الأسر
-                movedPiece: Pawn(
-                  color: pawnColor,
-                  type: PieceType.pawn,
-                  hasMoved: true,
-                ),
-                capturedPiece: board.getPieceAt(board.enPassantTarget!),
-                // enPassantTargetBefore: board.enPassantTarget,
-              ),
-            );
-          }
-        }
-      }
-    }
-  }
+  List<Move> getLegalMoves(Cell cell, [Board? boardParameter]) =>
+      ChessLogic.getLegalMoves(cell, boardParameter ?? this);
 }
 
 // دالة مساعدة لتحويل اللوحة إلى FEN (لاستخدامها في Board.initial)

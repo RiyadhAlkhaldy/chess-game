@@ -1,6 +1,9 @@
-part of 'game_repository_impl.dart';
+import '../entities/export.dart';
 
-extension EvaluateBoardForMinimax on GameRepositoryImpl {
+class AlphaBetaEvaluate {
+  final List<Board> _boardHistory = []; // لتتبع تكرار اللوحة
+  List<Move> redoStack = []; // لتتبع الحركات التي يمكن التراجع عنها
+
   /// قاموس يمثل قيم القطع (لتقييم اللوحة).
   static const Map<PieceType, int> _pieceValues = {
     PieceType.pawn: 100,
@@ -434,7 +437,7 @@ extension EvaluateBoardForMinimax on GameRepositoryImpl {
   // extension CheckGameConditions on GameRepositoryImpl {}
 
   // دالة لترتيب الحركات (مثال بسيط: الأسر أولاً)
-  void _sortMoves(List<Move> moves, Board board) {
+  void sortMoves(List<Move> moves, Board board) {
     moves.sort((a, b) {
       final bool aIsCapture = board.getPieceAt(a.end) != null;
       final bool bIsCapture = board.getPieceAt(b.end) != null;

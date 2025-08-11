@@ -115,7 +115,7 @@ $CellCopyWith<$Res>? get enPassantTarget {
 @JsonSerializable()
 
 class _Board implements Board {
-  const _Board({required final  List<List<Piece?>> squares, final  List<Move> moveHistory = const [], final  List<Move> redoStack = const [], this.currentPlayer = PieceColor.white, required final  Map<PieceColor, Cell> kingPositions, final  Map<PieceColor, Map<CastlingSide, bool>> castlingRights = const {PieceColor.white : {CastlingSide.kingSide : true, CastlingSide.queenSide : true}, PieceColor.black : {CastlingSide.kingSide : true, CastlingSide.queenSide : true}}, this.enPassantTarget, this.halfMoveClock = 0, this.fullMoveNumber = 1, final  List<String> positionHistory = const [], this.zobristKey = 0}): _squares = squares,_moveHistory = moveHistory,_redoStack = redoStack,_kingPositions = kingPositions,_castlingRights = castlingRights,_positionHistory = positionHistory;
+  const _Board({required final  List<List<Piece?>> squares, final  List<Move> moveHistory = const [], final  List<Move> redoStack = const [], this.currentPlayer = PieceColor.white, required final  Map<PieceColor, Cell> kingPositions, final  Map<PieceColor, Map<CastlingSide, bool>> castlingRights = const {PieceColor.white : {CastlingSide.kingSide : true, CastlingSide.queenSide : true}, PieceColor.black : {CastlingSide.kingSide : true, CastlingSide.queenSide : true}}, this.enPassantTarget, this.halfMoveClock = 0, this.fullMoveNumber = 1, final  List<String> positionHistory = const [], required this.zobristKey}): _squares = squares,_moveHistory = moveHistory,_redoStack = redoStack,_kingPositions = kingPositions,_castlingRights = castlingRights,_positionHistory = positionHistory;
   factory _Board.fromJson(Map<String, dynamic> json) => _$BoardFromJson(json);
 
  final  List<List<Piece?>> _squares;
@@ -184,7 +184,7 @@ class _Board implements Board {
   return EqualUnmodifiableListView(_positionHistory);
 }
 
-@override@JsonKey() final  int zobristKey;
+@override final  int zobristKey;
 
 /// Create a copy of Board
 /// with the given fields replaced by the non-null parameter values.

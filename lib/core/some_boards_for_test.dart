@@ -90,6 +90,7 @@ class SomeBoardsForTest {
       squares: initialSquares,
       kingPositions: initialKingPositions,
       currentPlayer: PieceColor.white,
+      zobristKey: 0, // Zobrist key for the board state
 
       // positionHistory: [initialFen], // Add initial position to history
     );
@@ -128,7 +129,7 @@ class SomeBoardsForTest {
       squares: initialSquares,
       kingPositions: initialKingPositions,
       currentPlayer: PieceColor.white,
-
+      zobristKey: 0, // Zobrist key for the board state
       // positionHistory: [initialFen], // Add initial position to history
     );
   }
@@ -169,6 +170,7 @@ class SomeBoardsForTest {
       squares: initialSquares,
       kingPositions: initialKingPositions,
       currentPlayer: PieceColor.white,
+      zobristKey: 0, // Zobrist key for the board state
 
       // positionHistory: [initialFen], // Add initial position to history
     );
@@ -220,7 +222,7 @@ class SomeBoardsForTest {
           CastlingSide.queenSide: false,
         },
       },
-
+      zobristKey: 0, // Zobrist key for the board state
       // positionHistory: [initialFen], // Add initial position to history
     );
   }
@@ -265,6 +267,7 @@ class SomeBoardsForTest {
       squares: initialSquares,
       kingPositions: initialKingPositions,
       currentPlayer: PieceColor.white,
+      zobristKey: 0, // Zobrist key for the board state
 
       // positionHistory: [initialFen], // Add initial position to history
     );
@@ -307,6 +310,7 @@ class SomeBoardsForTest {
       squares: initialSquares,
       kingPositions: initialKingPositions,
       currentPlayer: PieceColor.black,
+      zobristKey: 0, // Zobrist key for the board state
 
       // positionHistory: [initialFen], // Add initial position to history
     );
@@ -349,6 +353,7 @@ class SomeBoardsForTest {
       squares: initialSquares,
       kingPositions: initialKingPositions,
       currentPlayer: PieceColor.white,
+      zobristKey: 0, // Zobrist key for the board state
 
       // positionHistory: [initialFen], // Add initial position to history
     );

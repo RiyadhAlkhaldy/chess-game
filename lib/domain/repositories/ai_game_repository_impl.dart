@@ -2,10 +2,7 @@
 import 'dart:collection';
 import 'dart:math';
 
-import '../../domain/entities/board.dart';
-import '../../domain/entities/cell.dart';
-import '../../domain/entities/move.dart';
-import '../../domain/entities/piece.dart';
+import '../entities/export.dart';
 import 'game_repository.dart';
 import 'simulate_move.dart';
 
@@ -52,22 +49,6 @@ class SearchParams {
 
   SearchParams(this.board, this.depth);
 }
-
-/// [TranspositionEntry]
-/// يمثل إدخالًا في جدول التحويل.
-/// Represents an entry in the transposition table.
-class TranspositionEntry {
-  final int score;
-  final int depth;
-  final NodeType type; // Exact, LowerBound, UpperBound
-
-  TranspositionEntry(this.score, this.depth, this.type);
-}
-
-/// [NodeType]
-/// أنواع العقد في جدول التحويل.
-/// Node types in the transposition table.
-enum NodeType { exact, alpha, beta }
 
 /// [_AILogic]
 /// يحتوي هذا الكلاس على منطق الذكاء الاصطناعي الرئيسي (Minimax, Alpha-Beta, Evaluation).
@@ -770,6 +751,7 @@ class _AILogic {
   /// Orders moves to increase the effectiveness of Alpha-Beta Pruning.
   /// الحركات التي يحتمل أن تكون أفضل (مثل الالتقاطات أو الحركات التي تسبب كش) يجب أن تُقيَّم أولاً.
   /// Potentially better moves (like captures or checks) should be evaluated first.
+  // ignore: unused_element
   void _orderMoves(List<Move> moves, Board board) {
     moves.sort((a, b) {
       int scoreA = 0;

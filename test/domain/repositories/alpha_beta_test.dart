@@ -1,23 +1,27 @@
 import 'package:chess_gemini_2/domain/entities/board.dart';
 import 'package:chess_gemini_2/domain/entities/move.dart';
-import 'package:chess_gemini_2/domain/repositories/alpha_beta.dart';
+import 'package:chess_gemini_2/domain/repositories/game_repository_impl.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('Alpha-Beta Pruning Tests', () {
-    late AlphaBeta minimax;
+    late GameRepositoryImpl gameRepository;
 
     setUp(() {
-      minimax = AlphaBeta();
+      gameRepository = GameRepositoryImpl();
     });
 
     test('findBestMove returns a valid Move', () async {
       // Arrange
       final board = Board.initial();
-      final depth = 3;
+      final depth = 4;
 
       // Act
-      final bestMove = await minimax.findBestMove(board, depth);
+      final bestMove = await gameRepository.getAiMove(
+        board,
+        gameRepository.currentBoard.currentPlayer,
+        depth,
+      );
 
       // Assert
       expect(bestMove, isNotNull);
@@ -30,7 +34,10 @@ void main() {
       final depth = 2;
 
       // Act
-      final evaluation = minimax.evaluateBoard(board);
+      final evaluation = gameRepository.evaluateBoard(
+        board,
+        board.currentPlayer,
+      );
 
       // Assert
       expect(evaluation, isA<int>());
