@@ -18,7 +18,7 @@ class ZobristHashing {
 
   static final Map<int, int> _zobristEnPassantKeys = {}; // 8 قيم لـ a-h
 
-  bool zobristKeysInitialized = false;
+  static bool zobristKeysInitialized = false;
 
   // initialize zobrist
   static void initializeZobristKeys() {
@@ -98,8 +98,11 @@ class ZobristHashing {
 
   static int updateZobristKeyAfterMove(Board board, Move move) {
     int hash = board.zobristKey;
-    Piece? piece = board.getPieceAt(move.start)!;
-
+    Piece? piece = board.getPieceAt(move.start);
+    if (piece == null) {
+      // return 0; // أو يمكنك التعامل مع الخطأ بطريقة أخرى
+      throw ArgumentError('No piece at start position ${move.start}');
+    }
     hash ^=
         _zobristPieceKeys[piece.type]![piece.color]![move.start.row][move
             .start

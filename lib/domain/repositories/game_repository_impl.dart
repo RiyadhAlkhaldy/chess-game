@@ -16,18 +16,11 @@ class GameRepositoryImpl extends GameRepository {
   Board currentBoard;
   List<Board> _boardHistory = []; // لتتبع تكرار اللوحة
   List<Move> redoStack = []; // لتتبع الحركات التي يمكن التراجع عنها
-
-  //
-  // جداول Zobrist Hashing
-  final ZobristHashing _zobristHashing = ZobristHashing();
-
-  // جدول التحويل
-  /// مُنشئ لـ [GameRepositoryImpl]. يبدأ اللعبة بلوحة أولية للاعب الأبيض.
   // 'rnbqk2r/pp3ppp/2p2n2/3p2B1/1b1P4/2N2N2/PP2PPPP/R2QKB1R w KQkq - 0 1',
   GameRepositoryImpl() : currentBoard = Board.initial() {
-    if (!_zobristHashing.zobristKeysInitialized) {
+    if (!ZobristHashing.zobristKeysInitialized) {
       ZobristHashing.initializeZobristKeys();
-      _zobristHashing.zobristKeysInitialized = true;
+      ZobristHashing.zobristKeysInitialized = true;
     }
     _boardHistory.add(currentBoard);
     // if (!_zobristKeysInitialized) {
@@ -285,7 +278,7 @@ class GameRepositoryImpl extends GameRepository {
       kingPositions: newKingPositions,
       halfMoveClock: newHalfMoveClock,
       fullMoveNumber: newFullMoveNumber,
-      zobristKey: ZobristHashing.updateZobristKeyAfterMove(newBoard, move),
+      zobristKey: ZobristHashing.updateZobristKeyAfterMove(currentBoard, move),
     );
 
     currentBoard = newBoard.copyWith(positionHistory: [newBoard.toFenString()]);
@@ -318,11 +311,11 @@ class GameRepositoryImpl extends GameRepository {
     return SimulateMove.simulateMove(board, move);
   }
 
-  @override
-  bool isMoveResultingInCheck(Board board, Move move) {
-    final simulatedBoard = simulateMove(board, move);
-    return simulatedBoard.isKingInCheck(board.currentPlayer);
-  }
+  // @override
+  // bool isMoveResultingInCheck(Board board, Move move) {
+  //   final simulatedBoard = simulateMove(board, move);
+  //   return simulatedBoard.isKingInCheck(board.currentPlayer);
+  // }
 
   @override
   List<Move> getAllLegalMovesForCurrentPlayer(Board board) =>
@@ -330,7 +323,6 @@ class GameRepositoryImpl extends GameRepository {
 
   @override
   bool hasAnyLegalMoves(PieceColor playerColor, [Board? boardParameter]) {
-    // debugPrint("hasAnyLegalMoves");
     Board newBoard = boardParameter ?? currentBoard.copyWithDeepPieces();
     // لحساب الحركات القانونية للاعب، نحتاج إلى التأكد من أن isKingInCheck
     // والمنطق يعتمد على "اللاعب الحالي" في اللوحة.
@@ -635,9 +627,6 @@ extension AiLogic on GameRepositoryImpl {
     // الحصول على جميع الحركات القانونية للاعب الحالي.
     // Get all legal moves for the current player.
     final List<Move> legalMoves = getAllLegalMovesForCurrentPlayer(board);
-    // final List<Move> legalMoves = _getLegalMoves(board, aIcurrentPlayer);
-    // print("bestMove ${legalMoves.length}  ");
-
     // ترتيب الحركات لتحسين Alpha-Beta Pruning.
     // Order moves to improve Alpha-Beta Pruning.
     _sortMoves(legalMoves, board);

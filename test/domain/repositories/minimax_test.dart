@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('Minimax Tests', () {
     late Minimax minimax;
+    // ignore: unused_local_variable
     late String testFen;
     late String initialFen;
 

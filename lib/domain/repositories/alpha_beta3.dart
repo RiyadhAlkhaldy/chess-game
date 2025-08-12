@@ -7,12 +7,11 @@ import 'alpha_beta_evaluate.dart';
 import 'zobrist_hashing.dart';
 
 class AlphaBeta3 extends AlphaBetaEvaluate {
-  final ZobristHashing _zobristHashing = ZobristHashing();
   AlphaBeta3() {
-    if (_zobristHashing.zobristKeysInitialized == false) {
+    if (ZobristHashing.zobristKeysInitialized == false) {
       ZobristHashing.initializeZobristKeys();
 
-      _zobristHashing.zobristKeysInitialized = true;
+      ZobristHashing.zobristKeysInitialized = true;
     }
   }
   static int i = 0;
@@ -445,7 +444,10 @@ class AlphaBeta3 extends AlphaBetaEvaluate {
       kingPositions: newKingPositions,
       halfMoveClock: newHalfMoveClock,
       fullMoveNumber: newFullMoveNumber,
-      zobristKey: ZobristHashing.updateZobristKeyAfterMove(newBoard, move),
+      zobristKey: ZobristHashing.updateZobristKeyAfterMove(
+        boardParameter,
+        move,
+      ),
     );
 
     newBoard = newBoard.copyWith(positionHistory: [newBoard.toFenString()]);

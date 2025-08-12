@@ -3,7 +3,6 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../../data/chess_logic.dart';
 import '../repositories/simulate_move.dart';
-import '../repositories/zobrist_hasher.dart';
 import 'cell.dart';
 import 'move.dart';
 import 'piece.dart';
@@ -48,10 +47,14 @@ abstract class Board with _$Board {
     @Default([]) List<String> positionHistory,
     required int zobristKey,
   }) = _Board;
-  static final ZobristHasher hasher = ZobristHasher();
+  // static final ZobristHasher hasher = ZobristHasher();
 
   /// Factory constructor to set up the initial state of a chess board.
   factory Board.initial() {
+    if (!ZobristHashing.zobristKeysInitialized) {
+      ZobristHashing.initializeZobristKeys();
+      ZobristHashing.zobristKeysInitialized = true;
+    }
     final List<List<Piece?>> initialSquares = List.generate(
       8,
       (_) => List.filled(8, null),
@@ -149,6 +152,10 @@ abstract class Board with _$Board {
   /// Builds a Board object from a FEN (Forsyth-Edwards Notation) string.
   /// يبني كائن Board من سلسلة FEN (تدوين فورسيث-إدواردز).
   factory Board.fenToBoard(String fen) {
+    if (!ZobristHashing.zobristKeysInitialized) {
+      ZobristHashing.initializeZobristKeys();
+      ZobristHashing.zobristKeysInitialized = true;
+    }
     final parts = fen.split(' ');
     if (parts.length != 6) {
       throw ArgumentError('Invalid FEN string: "$fen". Must have 6 parts.');
@@ -364,7 +371,8 @@ abstract class Board with _$Board {
 
 extension ZobristHashingBoard on Board {
   int computeZobristHash() {
-    return Board.hasher.computeHash(this, currentPlayer == PieceColor.white);
+    return 0;
+    // return Board.hasher.computeHash(this, currentPlayer == PieceColor.white);
   }
 
   int get zobristKey => computeZobristHash();

@@ -12,7 +12,6 @@ class ChessLogic {
 
   static List<Move> getAllLegalMovesForCurrentPlayer([Board? boardParameter]) {
     final board = boardParameter;
-    // debugPrint("getAllLegalMovesForCurrentPlayer");
 
     final List<Move> allLegalMoves = [];
     final currentPlayerColor = board!.currentPlayer;

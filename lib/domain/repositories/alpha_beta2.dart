@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
+
 import '../entities/board.dart';
 import '../entities/cell.dart';
 import '../entities/move.dart';
@@ -106,11 +108,11 @@ class AlphaBeta2 {
     final Piece? pieceToMove = newBoard.getPieceAt(move.start);
 
     if (pieceToMove == null) {
-      print("خطأ: لا توجد قطعة في خلية البداية.");
+      debugPrint("خطأ: لا توجد قطعة في خلية البداية.");
       return newBoard; // لا تفعل شيئًا إذا لم تكن هناك قطعة
     }
     if (pieceToMove.color != newBoard.currentPlayer) {
-      print("خطأ: ليس دور هذا اللاعب ${pieceToMove.color.name} الان ");
+      debugPrint("خطأ: ليس دور هذا اللاعب ${pieceToMove.color.name} الان ");
       return newBoard; // لا تفعل شيئًا إذا لم يكون دور هذا اللاعب
     }
 

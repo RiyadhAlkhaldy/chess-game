@@ -15,7 +15,6 @@ class SimulateMove {
     // 1. إنشاء نسخة عميقة من اللوحة الحالية
     // هذا أمر بالغ الأهمية لضمان أن التغييرات في اللوحة المحاكاة لا تؤثر على اللوحة الأصلية أو أي لوحات أخرى.
     Board simulatedBoard = board.copyWithDeepPieces();
-
     final Piece? pieceToMove = simulatedBoard.getPieceAt(move.start);
 
     if (pieceToMove == null) {
@@ -239,7 +238,7 @@ class SimulateMove {
           halfMoveClock: newHalfMoveClock,
           fullMoveNumber: newFullMoveNumber,
           positionHistory: newPositionHistory,
-          zobristKey: ZobristHashing.updateZobristKeyAfterMove(simulatedBoard, move)
+          zobristKey: ZobristHashing.updateZobristKeyAfterMove(board, move),
           // لا تقم بتضمين moveHistory هنا ما لم تكن بحاجة لتتبعها داخل Minimax لأسباب خاصة (مثل قاعدة التكرار الثلاثي في العقد الفرعية، وهو أمر معقد وغير شائع).
           // عادةً، يتم فحص التكرار الثلاثي على لوحات اللعبة الفعلية.
         )

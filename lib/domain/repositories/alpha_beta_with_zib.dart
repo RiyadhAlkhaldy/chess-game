@@ -66,10 +66,12 @@ class AlphaBeta {
     if (entry != null && entry.depth >= depth) {
       // استخدام القيمة المحفوظة حسب نوعها
       if (entry.type == EntryType.exact) return entry.value;
-      if (entry.type == EntryType.lowerBound && entry.value >= beta)
+      if (entry.type == EntryType.lowerBound && entry.value >= beta) {
         return entry.value;
-      if (entry.type == EntryType.upperBound && entry.value <= alpha)
+      }
+      if (entry.type == EntryType.upperBound && entry.value <= alpha) {
         return entry.value;
+      }
     }
 
     // الحالة النهائية أو الوصول إلى أقصى عمق

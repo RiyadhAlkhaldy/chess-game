@@ -30,8 +30,7 @@ void main() {
 
     test('minimax evaluates board correctly', () async {
       // Arrange
-      final board = Board.initial();
-      final depth = 2;
+      final board = Board.initial(); 
 
       // Act
       final evaluation = gameRepository.evaluateBoard(

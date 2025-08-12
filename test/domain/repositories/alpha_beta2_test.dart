@@ -2,6 +2,7 @@ import 'package:chess_gemini_2/domain/entities/board.dart';
 import 'package:chess_gemini_2/domain/entities/move.dart';
 import 'package:chess_gemini_2/domain/repositories/alpha_beta2.dart'
     show AlphaBeta2;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -17,11 +18,11 @@ void main() {
       for (int i = 0; i < 10; i++) {
         Move? bestMove = await alphaBeta.findBestMove(board, 4);
         // print('currentPlayer: ${board.currentPlayer} Best move: $bestMove');
-        print('value= ${AlphaBeta2.i}  int i=$i ');
+        debugPrint('value= ${AlphaBeta2.i}  int i=$i ');
         board = alphaBeta.makeMove(bestMove!, board);
       }
       // print('currentPlayer: ${board.currentPlayer} Best move: $bestMove');
-      print('int i = ${AlphaBeta2.i} iii');
+      debugPrint('int i = ${AlphaBeta2.i} iii');
       // Assert
       // expect(bestMove, isNotNull);
       // expect(bestMove, isA<Move>());
@@ -43,7 +44,6 @@ void main() {
     test('minimax evaluates board correctly', () async {
       // Arrange
       final board = Board.initial();
-      final depth = 2;
 
       // Act
       final evaluation = alphaBeta.evaluateBoard(board);

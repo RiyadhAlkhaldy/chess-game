@@ -49,7 +49,7 @@ abstract class GameRepository {
   /// التحقق مما إذا كانت الحركة تضع الملك في خطر (كش).
   /// [board] اللوحة الحالية.
   /// [move] الحركة المراد التحقق منها.
-  bool isMoveResultingInCheck(Board board, Move move);
+  // bool isMoveResultingInCheck(Board board, Move move);
 
   /// الحصول على جميع الحركات القانونية للّاعب الحالي.
   List<Move> getAllLegalMovesForCurrentPlayer(Board baord);
