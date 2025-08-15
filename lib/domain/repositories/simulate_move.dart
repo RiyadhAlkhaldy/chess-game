@@ -37,11 +37,22 @@ class SimulateMove {
 
     // 3. تحديث موقع الملك (إذا كانت القطعة المتحركة ملكاً)
     if (pieceToMove.type == PieceType.king) {
-      final Map<PieceColor, Cell> newKingPositions = Map.from(
+      Map<PieceColor, Cell> newKingPositions = Map.from(
         simulatedBoard.kingPositions,
       );
-      newKingPositions[pieceToMove.color] = move.end;
-      simulatedBoard = simulatedBoard.copyWith(kingPositions: newKingPositions);
+      newKingPositions =
+          newKingPositions..update(pieceToMove.color, (value) => move.end);
+      Map<PieceColor, Map<CastlingSide, bool>> castlingRights = Map.from(
+        simulatedBoard.castlingRights,
+      );
+      simulatedBoard = simulatedBoard.copyWith(
+        kingPositions: newKingPositions,
+        castlingRights:
+            castlingRights..update(
+              pieceToMove.color,
+              (value) => value..update(CastlingSide.kingSide, (value) => false),
+            ),
+      );
     }
 
     // 4. معالجة الأسر بالمرور (En Passant)
@@ -170,7 +181,7 @@ class SimulateMove {
     if (move.isCapture) {
       // تحقق من الرخ الذي تم أسره (إذا كان رخ)
       if (move.end == const Cell(row: 0, col: 0) &&
-          simulatedBoard.getPieceAt(move.end)?.type == PieceType.rook) {
+          board.getPieceAt(move.end)?.type == PieceType.rook) {
         // رخ أسود يسار
         newCastlingRights =
             newCastlingRights..update(
@@ -180,7 +191,7 @@ class SimulateMove {
                     ..update(CastlingSide.queenSide, (value) => false),
             );
       } else if (move.end == const Cell(row: 0, col: 7) &&
-          simulatedBoard.getPieceAt(move.end)?.type == PieceType.rook) {
+          board.getPieceAt(move.end)?.type == PieceType.rook) {
         // رخ أسود يمين
         newCastlingRights =
             newCastlingRights..update(
@@ -190,7 +201,7 @@ class SimulateMove {
                     ..update(CastlingSide.kingSide, (value) => false),
             );
       } else if (move.end == const Cell(row: 7, col: 0) &&
-          simulatedBoard.getPieceAt(move.end)?.type == PieceType.rook) {
+          board.getPieceAt(move.end)?.type == PieceType.rook) {
         // رخ أبيض يسار
         newCastlingRights =
             newCastlingRights..update(
@@ -200,7 +211,7 @@ class SimulateMove {
                     ..update(CastlingSide.queenSide, (value) => false),
             );
       } else if (move.end == const Cell(row: 7, col: 7) &&
-          simulatedBoard.getPieceAt(move.end)?.type == PieceType.rook) {
+          board.getPieceAt(move.end)?.type == PieceType.rook) {
         // رخ أبيض يمين
         newCastlingRights =
             newCastlingRights..update(

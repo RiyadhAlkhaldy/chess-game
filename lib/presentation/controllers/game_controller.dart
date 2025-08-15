@@ -244,7 +244,7 @@ class GameController extends GetxController {
         'دور الذكاء الاصطناعي (${aiPlayerColor == PieceColor.white ? 'الأبيض' : 'الأسود'})',
       );
       await Future.delayed(
-        const Duration(milliseconds: 300),
+        const Duration(milliseconds: 100),
       ); // تأخير بسيط لمحاكاة التفكير
 
       try {

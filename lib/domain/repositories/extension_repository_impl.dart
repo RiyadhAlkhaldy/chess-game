@@ -1,4 +1,4 @@
-part of 'game_repository_impl.dart';
+part of 'game_repository_impl_copy.dart';
 
 extension EvaluateBoardForMinimax on GameRepositoryImpl {
   /// قاموس يمثل قيم القطع (لتقييم اللوحة).
@@ -204,11 +204,11 @@ extension EvaluateBoardForMinimax on GameRepositoryImpl {
     }
 
     // 2. تقييم هيكل البيادق
-    score += _evaluatePawnStructure(board, aiPlayerColor);
-    score -= _evaluatePawnStructure(
-      board,
-      aiPlayerColor == PieceColor.white ? PieceColor.black : PieceColor.white,
-    );
+    // score += _evaluatePawnStructure(board, aiPlayerColor);
+    // score -= _evaluatePawnStructure(
+    //   board,
+    //   aiPlayerColor == PieceColor.white ? PieceColor.black : PieceColor.white,
+    // );
 
     // 3. تقييم أمان الملك
     score += _evaluateKingSafety(board, aiPlayerColor);

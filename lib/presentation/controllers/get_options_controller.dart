@@ -18,7 +18,7 @@ class GameOptionsController extends GetxController {
       PieceColor.white.obs; // Reactive variable for the player's color
   // Reactive variable to track the selected game mode
 
-  RxInt aiDepth = 3.obs; // AI depth for AI player
+  RxInt aiDepth = 4.obs; // AI depth for AI player
 
   void changeValuecolorPlayer(PieceColor playerColor) {
     if (playerColor == PieceColor.white) {

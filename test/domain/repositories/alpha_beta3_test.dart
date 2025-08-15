@@ -20,9 +20,11 @@ void main() {
       for (int i = 0; i < 20; i++) {
         Move? bestMove = await alphaBeta1.findBestMove(board, depth);
         debugPrint('int3 i = ${AlphaBeta3.i}');
+        // debugPrint('ENTRY TRANSP 1 = ${alphaBeta1.entryTransTable}');
         board = alphaBeta1.makeMove(bestMove!, board);
         bestMove = await alphaBeta2.findBestMove(board, depth);
         debugPrint('int4 i = ${AlphaBeta3.i}');
+        // debugPrint('ENTRY TRANSP 2 = ${alphaBeta2.entryTransTable}');
         board = alphaBeta2.makeMove(bestMove!, board);
       }
       // print('currentPlayer: ${board.currentPlayer} Best move: $bestMove');

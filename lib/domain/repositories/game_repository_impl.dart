@@ -4,12 +4,10 @@ import 'package:chess_gemini_2/domain/repositories/zobrist_hashing.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/chess_logic.dart';
+import '../../data/engine/ai_engine.dart';
 import '../../domain/repositories/game_repository.dart';
 import '../entities/export.dart';
-import 'ai_game_repository_impl.dart';
 import 'simulate_move.dart';
-
-part 'extension_repository_impl.dart';
 
 /// تطبيق [GameRepository] الذي يحتوي على منطق لعبة الشطرنج الفعلي.
 class GameRepositoryImpl extends GameRepository {
@@ -407,70 +405,33 @@ class GameRepositoryImpl extends GameRepository {
   /// العمق الأقصى لـ Minimax.
   /// (يمكن زيادته للحصول على AI أقوى، ولكنه يزيد من وقت المعالجة).
   // static const int _maxMinimaxDepth = 3; // مثال: 3 حركات للأمام
+
   @override
   Future<Move?> getAiMove(
     Board board,
     PieceColor aiPlayerColor,
     int aiDepth,
   ) async {
-    i = 0; // Reset the counter for each call  final int zobristKey = board.zobristKey;
-    final int zobristKey = board.zobristKey;
-
-    if (ZobristHashing.transpositionTable.containsKey(zobristKey)) {
-      final entry = ZobristHashing.transpositionTable[zobristKey]!;
-      if (entry.bestMove != null) {
-        // return entry.bestMove; // إذا كان هناك نتيجة مخزنة، استخدمها
-      }
-    }
-    List<Move> moves = board.getAllLegalMovesForCurrentPlayer();
-
-    // 3. ترتيب الحركات: ضع أفضل حركة مخزنة أولاً
-    _sortMoves(moves, board);
-    // هذا يزيد من كفاءة تقليم ألفا-بيتا
-    if (ZobristHashing.transpositionTable.containsKey(zobristKey) &&
-        ZobristHashing.transpositionTable[zobristKey]!.bestMove != null) {
-      final bestMoveFromTable =
-          ZobristHashing.transpositionTable[zobristKey]!.bestMove!;
-      // ضع أفضل حركة في بداية القائمة
-      moves.remove(bestMoveFromTable);
-      moves.insert(0, bestMoveFromTable);
-    }
-    Move? bestMove;
-    int bestValue = -1000000; // قيمة أولية صغيرة جداً
-    // قم بضبط قيم ألفا وبيتا الأولية للبحث الأولي
-    int alpha = -1000000;
-    int beta = 1000000;
-    for (var move in moves) {
-      final newBoard = board.simulateMove(move);
-      final moveValue = await alphaBeta(
-        newBoard,
-        aiDepth - 1,
-        alpha,
-        beta,
-        false,
-      );
-
-      if (moveValue > bestValue) {
-        bestValue = moveValue;
-        bestMove = move;
-      }
-
-      // تحديث alpha بعد كل حركة، لأن getAiMove تعمل كلاعب معظّم
-      alpha = max(alpha, bestValue);
-      // إذا حدث تقليم هنا، يمكننا الخروج مبكراً
-      if (beta <= alpha) break;
-    }
-    // 4. تخزين النتيجة النهائية وأفضل حركة في جدول التحويل
-    // هذا ضروري لتخزين النتيجة وأفضل حركة في جدول التحويل عند العمق الأقصى
-    ZobristHashing.transpositionTable[zobristKey] = TranspositionEntry(
-      score: bestValue,
-      depth: aiDepth,
-      type: NodeType.exact,
-      bestMove: bestMove,
+    // Respect clean architecture: repository coordinates the engine.
+    final engine = AiEngine(
+      cfg: AiSearchConfig(maxDepth: aiDepth, timeMs: 6000),
     );
-    return bestMove;
+    // Engine infers side-to-move from board.currentPlayer; aiPlayerColor is used for sanity if needed.
+    if (board.currentPlayer != aiPlayerColor) {
+      // If mismatch happens (UI passes human color), still search from this position.
+    }
+
+    final best = await engine.search(board);
+    // Optionally store into existing Zobrist TT if available in your project:
+    if (best != null) {
+      final key = board.zobristKey;
+      // Safe: only if types match in your ZobristHashing implementation.
+      // try { ZobristHashing.transpositionTable[key] = TranspositionEntry(score: 0, depth: aiDepth, type: NodeType.exact, bestMove: best); } catch (_) {}
+    }
+    return best;
   }
 
+  // DEPRECATED: replaced by AiEngine
   Future<int> alphaBeta(
     Board board,
     int depth,
@@ -478,7 +439,6 @@ class GameRepositoryImpl extends GameRepository {
     int beta,
     bool isMaximizing,
   ) async {
-    i++; // Increment the counter for each call
     if (depth == 0 || board.isGameOver()) {
       return board.evaluateBoard();
     }
@@ -551,13 +511,10 @@ class GameRepositoryImpl extends GameRepository {
 
       // تحديد نوع العقدة
       if (bestValue <= alpha) {
-        // //debugprint("bestValue <= alpha");
         nodeType = NodeType.beta; // القيمة هي حد أقصى (حدث تقليم)
       } else if (bestValue >= beta) {
-        //debugprint("bestValue >= beta");
         nodeType = NodeType.alpha; // القيمة هي حد أدنى (حدث تقليم)
       } else {
-        //debugprint("bestValue == exact");
         nodeType = NodeType.exact; // القيمة دقيقة
       }
     } else {
@@ -582,13 +539,10 @@ class GameRepositoryImpl extends GameRepository {
       }
       // تحديد نوع العقدة
       if (bestValue <= alpha) {
-        // //debugprint("bestValue <= alpha");
         nodeType = NodeType.beta; // القيمة هي حد أقصى (حدث تقليم)
       } else if (bestValue >= beta) {
-        //debugprint("bestValue >= beta");
         nodeType = NodeType.alpha; // القيمة هي حد أدنى (حدث تقليم)
       } else {
-        //debugprint("bestValue == exact");
         nodeType = NodeType.exact; // القيمة دقيقة
       }
     }
@@ -602,260 +556,638 @@ class GameRepositoryImpl extends GameRepository {
 
     return bestValue;
   }
-
-  static int i = 0;
 }
 
-extension AiLogic on GameRepositoryImpl {
-  // PieceColor _getOppenentColor(PieceColor color) =>
-  //     color == PieceColor.white ? PieceColor.black : PieceColor.white;
+extension EvaluateBoardForMinimax on GameRepositoryImpl {
+  /// قاموس يمثل قيم القطع (لتقييم اللوحة).
+  static const Map<PieceType, int> _pieceValues = {
+    PieceType.pawn: 100,
+    PieceType.knight: 320,
+    PieceType.bishop: 330,
+    PieceType.rook: 500,
+    PieceType.queen: 900,
+    PieceType.king: 20000, // قيمة عالية جدا للملك
+  };
+  // مثال: جزء من جدول مواقع البيادق
+  static const List<List<int>> pawnPST = [
+    [0, 0, 0, 0, 0, 0, 0, 0], // الصف 8 (ترقية)
+    [5, 10, 10, -20, -20, 10, 10, 5], // الصف 7
+    [5, -5, -10, 0, 0, -10, -5, 5], // الصف 6
+    [0, 0, 0, 20, 20, 0, 0, 0], // الصف 5 (مكافأة على المركز)
+    [5, 5, 10, 25, 25, 10, 5, 5], // الصف 4
+    [10, 10, 20, 30, 30, 20, 10, 10], // الصف 3
+    [50, 50, 50, 50, 50, 50, 50, 50], // الصف 2 (ترقية قريبة)
+    [0, 0, 0, 0, 0, 0, 0, 0], // الصف 1 (موقع البداية)
+  ];
+  // lib/data/repositories/game_repository_impl.dart
 
-  ///
-  static late PieceColor aIcurrentPlayer;
-  static int i = 0;
+  // ... (بقية الكود) ...
+  static const Map<PieceType, List<List<int>>> _pieceSquareTables = {
+    // جداول مواقع البيادق
+    PieceType.pawn: [
+      [0, 0, 0, 0, 0, 0, 0, 0],
+      [50, 50, 50, 50, 50, 50, 50, 50],
+      [10, 10, 20, 30, 30, 20, 10, 10],
+      [5, 5, 10, 25, 25, 10, 5, 5],
+      [0, 0, 0, 20, 20, 0, 0, 0],
+      [5, -5, -10, 0, 0, -10, -5, 5],
+      [5, 10, 10, -20, -20, 10, 10, 5],
+      [0, 0, 0, 0, 0, 0, 0, 0],
+    ],
 
-  /// [minimaxRoot]
-  /// نقطة الدخول لخوارزمية Minimax/Alpha-Beta.
-  /// The entry point for the Minimax/Alpha-Beta algorithm.
-  Move? minimaxRoot(SearchParams searchParams) {
-    Board board = searchParams.board;
-    int depth = searchParams.depth;
-    aIcurrentPlayer = board.currentPlayer;
-    Move? bestMove;
-    int bestValue = -99999;
-    debugPrint("bestMove $bestMove myint i = $i ");
-    // الحصول على جميع الحركات القانونية للاعب الحالي.
-    // Get all legal moves for the current player.
-    final List<Move> legalMoves = getAllLegalMovesForCurrentPlayer(board);
-    // ترتيب الحركات لتحسين Alpha-Beta Pruning.
-    // Order moves to improve Alpha-Beta Pruning.
-    _sortMoves(legalMoves, board);
-    int boardValue = -99999;
-    for (final move in legalMoves) {
-      // تطبيق الحركة على نسخة من اللوحة.
-      // Apply the move to a copy of the board.
-      // debugPrint(
-      //   "minimaxRoot n = ${++n} from ${legalMoves.length} $boardValue",
-      // );
+    // جداول مواقع الأحصنة
+    PieceType.knight: [
+      [-50, -40, -30, -30, -30, -30, -40, -50],
+      [-40, -20, 0, 0, 0, 0, -20, -40],
+      [-30, 0, 10, 15, 15, 10, 0, -30],
+      [-30, 5, 15, 20, 20, 15, 5, -30],
+      [-30, 0, 15, 20, 20, 15, 0, -30],
+      [-30, 5, 10, 15, 15, 10, 5, -30],
+      [-40, -20, 0, 5, 5, 0, -20, -40],
+      [-50, -40, -30, -30, -30, -30, -40, -50],
+    ],
 
-      final newBoard = simulateMove(board, move);
-      // تبديل اللاعب الحالي.
-      // Switch the current player.
-      final simulatedBoard = newBoard.copyWith(
-        currentPlayer:
-            aIcurrentPlayer == PieceColor.white
-                ? PieceColor.black
-                : PieceColor.white,
-      );
+    // جداول مواقع الأساقفة
+    PieceType.bishop: [
+      [-20, -10, -10, -10, -10, -10, -10, -20],
+      [-10, 0, 0, 0, 0, 0, 0, -10],
+      [-10, 0, 5, 10, 10, 5, 0, -10],
+      [-10, 5, 5, 10, 10, 5, 5, -10],
+      [-10, 0, 10, 10, 10, 10, 0, -10],
+      [-10, 10, 10, 10, 10, 10, 10, -10],
+      [-10, 5, 0, 0, 0, 0, 5, -10],
+      [-20, -10, -10, -10, -10, -10, -10, -20],
+    ],
 
-      // استدعاء Minimax لحساب قيمة هذه الوضعية.
-      // Call Minimax to calculate the value of this position.
-      boardValue = _minimax(
-        simulatedBoard,
-        depth - 1,
-        -99999,
-        99999,
-        aIcurrentPlayer == PieceColor.white
-            ? PieceColor
-                .black // الخصم هو الذي سيلعب بعد هذه الحركة
-            : PieceColor.white,
-      );
-      // debugPrint("boardValue  $boardValue");
+    // جداول مواقع الأبراج
+    PieceType.rook: [
+      [0, 0, 0, 0, 0, 0, 0, 0],
+      [5, 10, 10, 10, 10, 10, 10, 5],
+      [-5, 0, 0, 0, 0, 0, 0, -5],
+      [-5, 0, 0, 0, 0, 0, 0, -5],
+      [-5, 0, 0, 0, 0, 0, 0, -5],
+      [-5, 0, 0, 0, 0, 0, 0, -5],
+      [-5, 0, 0, 0, 0, 0, 0, -5],
+      [0, 0, 0, 5, 5, 0, 0, 0],
+    ],
 
-      // إذا كانت هذه الحركة أفضل من أفضل حركة سابقة، قم بتحديثها.
-      // If this move is better than the previous best move, update it.
-      if (boardValue > bestValue) {
-        bestValue = boardValue;
-        bestMove = move;
+    // جداول مواقع الملكات
+    PieceType.queen: [
+      [-20, -10, -10, -5, -5, -10, -10, -20],
+      [-10, 0, 0, 0, 0, 0, 0, -10],
+      [-10, 0, 5, 5, 5, 5, 0, -10],
+      [-5, 0, 5, 5, 5, 5, 0, -5],
+      [0, 0, 5, 5, 5, 5, 0, -5],
+      [-10, 5, 5, 5, 5, 5, 0, -10],
+      [-10, 0, 5, 0, 0, 0, 0, -10],
+      [-20, -10, -10, -5, -5, -10, -10, -20],
+    ],
+
+    // جداول مواقع الملك في مرحلة الافتتاح والوسط
+    PieceType.king: [
+      [-30, -40, -40, -50, -50, -40, -40, -30],
+      [-30, -40, -40, -50, -50, -40, -40, -30],
+      [-30, -40, -40, -50, -50, -40, -40, -30],
+      [-30, -40, -40, -50, -50, -40, -40, -30],
+      [-20, -30, -30, -40, -40, -30, -30, -20],
+      [-10, -20, -20, -20, -20, -20, -20, -10],
+      [20, 20, 0, 0, 0, 0, 20, 20],
+      [20, 30, 10, 0, 0, 10, 30, 20],
+    ],
+  };
+  // جداول مواقع الملك في نهاية اللعبة (Endgame)
+  // يفضل أن يكون جدول الملك مختلفًا في نهاية اللعبة لأن الملك يصبح أكثر نشاطًا.
+  // يمكننا تحديد ذلك بناءً على عدد القطع المتبقية على اللوحة.
+  List<List<int>> get kingEndgame => [
+    [-50, -30, -30, -30, -30, -30, -30, -50],
+    [-30, -10, -10, -10, -10, -10, -10, -30],
+    [-30, -10, 20, 30, 30, 20, -10, -30],
+    [-30, -10, 30, 40, 40, 30, -10, -30],
+    [-30, -10, 30, 40, 40, 30, -10, -30],
+    [-30, -10, 20, 30, 30, 20, -10, -30],
+    [-30, -20, -10, 0, 0, -10, -20, -30],
+    [-50, -40, -30, -20, -20, -30, -40, -50],
+  ];
+  // مثال بسيط جداً لجداول المواقع (يمكن أن تكون أكثر تفصيلاً)
+
+  double evaluateBoardScore(Board board, PieceColor aiColor) {
+    double score = 0.0;
+
+    for (int y = 0; y < 8; y++) {
+      for (int x = 0; x < 8; x++) {
+        final piece = board.getPieceAt(Cell(row: y, col: x));
+        if (piece != null) {
+          double value = _getPieceValue(piece.type);
+          score += piece.color == aiColor ? value : -value;
+        }
       }
     }
-    debugPrint("bestMove $bestMove myint i = $i ");
-    // i = 0;
-    return bestMove;
+
+    return score;
   }
 
-  /// [_minimax]
-  /// تنفيذ خوارزمية Minimax مع Alpha-Beta Pruning.
-  /// Minimax algorithm implementation with Alpha-Beta Pruning.
-  int _minimax(
-    Board board,
-    int depth,
-    int alpha,
-    int beta,
-    PieceColor currentPlayer,
-  ) {
-    i++;
-    // debugPrint(
-    //   "int i = $i depth $depth alpha $alpha, beta $beta , $currentPlayer",
+  double _getPieceValue(PieceType type) {
+    switch (type) {
+      case PieceType.pawn:
+        return 1.0;
+      case PieceType.knight:
+        return 3.0;
+      case PieceType.bishop:
+        return 3.3;
+      case PieceType.rook:
+        return 5.0;
+      case PieceType.queen:
+        return 9.0;
+      case PieceType.king:
+        return 1000.0;
+    }
+  }
+
+  List<Move> orderMoves(List<Move> moves) {
+    moves.sort((a, b) {
+      int aScore = _moveScore(a);
+      int bScore = _moveScore(b);
+      return bScore.compareTo(aScore); // ترتيب تنازلي
+    });
+    return moves;
+  }
+
+  int _moveScore(Move move) {
+    int score = 0;
+    if (move.isCapture == true) score += 100;
+    if (move.isPromotion == true) score += 80;
+    // يمكن إضافة المزيد من الشروط لتقييم الحركة
+    // على سبيل المثال:
+    if (move.isEnPassant == true) score += 50;
+    if (move.isCastling == true) score += 30;
+    // يمكن إضافة تقييمات للكش أو الشيك ميت
+    // مثال:
+    // if (move.isCheckmate) score += 200;
+    // if (move.isCheck) score += 50;
+    return score;
+  }
+
+  int evaluateBoard(Board board, PieceColor aiPlayerColor) {
+    int score = 0;
+    final isEndgame = _isEndgame(board);
+
+    // 1. تقييم قيمة القطع ومكافآت المواقع (PSTs)
+    for (int r = 0; r < 8; r++) {
+      for (int c = 0; c < 8; c++) {
+        final piece = board.squares[r][c];
+        if (piece != null) {
+          final pieceValue = _pieceValues[piece.type] ?? 0;
+          int positionBonus = 0;
+
+          final pst =
+              isEndgame && piece.type == PieceType.king
+                  ? kingEndgame
+                  : _pieceSquareTables[piece.type];
+
+          if (pst != null) {
+            if (piece.color == PieceColor.white) {
+              positionBonus = pst[r][c];
+            } else {
+              positionBonus = pst[7 - r][c];
+            }
+          }
+
+          if (piece.color == aiPlayerColor) {
+            score += pieceValue + positionBonus;
+          } else {
+            score -= (pieceValue + positionBonus);
+          }
+        }
+      }
+    }
+
+    // 2. تقييم هيكل البيادق
+    // score += _evaluatePawnStructure(board, aiPlayerColor);
+    // score -= _evaluatePawnStructure(
+    //   board,
+    //   aiPlayerColor == PieceColor.white ? PieceColor.black : PieceColor.white,
     // );
-    // القاعدة الأساسية: إذا وصل العمق إلى صفر أو كانت اللعبة قد انتهت (كش ملك/تعادل).
-    // Base case: If depth is zero or the game is over (checkmate/draw).
-    if (depth == 0 || _isGameOver(board)) {
-      return evaluateBoard(board, currentPlayer);
-    }
 
-    // اللاعب الذي يحاول تعظيم نتيجته.
-    // Player trying to maximize their score.
-    if (currentPlayer == aIcurrentPlayer) {
-      // AI's turn
-      int maxEval = -99999;
-      final List<Move> legalMoves = getAllLegalMovesForCurrentPlayer(board);
-      _sortMoves(legalMoves, board);
+    // 3. تقييم أمان الملك
+    score += _evaluateKingSafety(board, aiPlayerColor);
+    score -= _evaluateKingSafety(
+      board,
+      aiPlayerColor == PieceColor.white ? PieceColor.black : PieceColor.white,
+    );
 
-      for (final move in legalMoves) {
-        final newBoard = simulateMove(board, move);
-        final simulatedBoard = newBoard.copyWith(
-          currentPlayer:
-              currentPlayer == PieceColor.white
-                  ? PieceColor.black
-                  : PieceColor.white,
-        );
-        final eval = _minimax(
-          simulatedBoard,
-          depth - 1,
-          alpha,
-          beta,
-          simulatedBoard.currentPlayer,
-        );
-        maxEval = max(maxEval, eval);
-        alpha = max(alpha, eval);
-        if (beta <= alpha) {
-          // Alpha-Beta Pruning
-          break;
+    // 4. تقييم نشاط القطع
+    score += _evaluatePieceActivity(board, aiPlayerColor);
+    score -= _evaluatePieceActivity(
+      board,
+      aiPlayerColor == PieceColor.white ? PieceColor.black : PieceColor.white,
+    );
+
+    // return score;
+
+    // إضافة المزيد من العوامل:
+
+    // 2. السيطرة على المركز (يمكن تعزيزها):
+    //    * مكافأة إضافية للقطع التي تسيطر على مربعات e4, d4, e5, d5.
+    final centerCells = [
+      const Cell(row: 3, col: 3),
+      const Cell(row: 3, col: 4),
+      const Cell(row: 4, col: 3),
+      const Cell(row: 4, col: 4),
+    ];
+    for (var cell in centerCells) {
+      // مكافأة للقطع التي تهاجم أو تشغل مربعات المركز
+      final piece = board.getPieceAt(cell);
+      if (piece != null) {
+        if (piece.color == aiPlayerColor) {
+          score += 20; // مكافأة أكبر قليلا للتحكم المركزي
+        } else {
+          score -= 20;
         }
       }
-      // _transpositionTable[fen] = TranspositionEntry(
-      //   maxEval,
-      //   depth,
-      //   NodeType.exact,
-      // ); // حفظ النتيجة الدقيقة
-      return maxEval;
+      // يمكنك أيضا التحقق من الحركات المحتملة التي تصل إلى المركز
     }
-    // اللاعب الذي يحاول تقليل نتيجته (الخصم).
-    // Player trying to minimize their score (opponent).
-    else {
-      // Opponent's turn
-      int minEval = 99999;
-      final List<Move> legalMoves = getAllLegalMovesForCurrentPlayer(board);
-      _sortMoves(legalMoves, board);
 
-      for (final move in legalMoves) {
-        final newBoard = simulateMove(board, move);
-        final simulatedBoard = newBoard.copyWith(
-          currentPlayer:
-              currentPlayer == PieceColor.white
-                  ? PieceColor.black
-                  : PieceColor.white,
-        );
-        final eval = _minimax(
-          simulatedBoard,
-          depth - 1,
-          alpha,
-          beta,
-          simulatedBoard.currentPlayer,
-        );
-        minEval = min(minEval, eval);
-        beta = min(beta, eval);
-        if (beta <= alpha) {
-          // Alpha-Beta Pruning
-          break;
-        }
-      }
+    // 3. هيكل البيادق:
+    //    * خصم على البيادق المعزولة (Isolated Pawns).
+    //    * خصم على البيادق المتضاعفة (Doubled Pawns).
+    //    * مكافأة على البيادق المتصلة (Connected Pawns).
+    // هذا يتطلب دالة مساعدة لتحليل البيادق.
+    score += _evaluatePawnStructure(board, aiPlayerColor);
 
-      // _transpositionTable[fen] = TranspositionEntry(
-      //   minEval,
-      //   depth,
-      //   NodeType.exact,
-      // ); // حفظ النتيجة الدقيقة
-      return minEval;
-    }
+    // 4. نشاط القطع:
+    //    * مكافأة على القطع النشطة (التي لديها العديد من الحركات المحتملة).
+    //    * مكافأة على القطع التي تهاجم قطع الخصم.
+
+    // 5. مراحل اللعبة (Game Phase):
+    //    * تختلف أوزان العوامل المختلفة باختلاف مرحلة اللعبة (افتتاح، وسط، نهاية).
+    //    * في نهاية اللعبة، يزداد نشاط الملك وقيمة البيادق المتقدمة.
+    //    * يمكن تحديد مرحلة اللعبة بناءً على عدد القطع المتبقية على اللوحة.
+
+    return score;
   }
 
-  bool _isGameOver(Board board) {
-    // debugPrint("_isGameOver");
+  // قم بإضافة هذه الدالة المساعدة لتقييم هيكل البيادق
+  int _evaluatePawnStructure(Board board, PieceColor playerColor) {
+    int pawnStructureScore = 0;
+    final int direction = (playerColor == PieceColor.white) ? -1 : 1;
 
-    // التحقق من شروط نهاية اللعبة
-    final gameResult = checkGameEndConditions(board, true);
-    if (gameResult.outcome != GameOutcome.playing) return true;
+    for (int col = 0; col < 8; col++) {
+      int pawnCountInCol = 0;
+      List<int> pawnRowsInCol = [];
+
+      // عد البيادق في كل عمود
+      for (int row = 0; row < 8; row++) {
+        final piece = board.squares[row][col];
+        if (piece != null &&
+            piece.type == PieceType.pawn &&
+            piece.color == playerColor) {
+          pawnCountInCol++;
+          pawnRowsInCol.add(row);
+        }
+      }
+
+      // 1. خصم البيادق المتضاعفة (Doubled Pawns)
+      if (pawnCountInCol > 1) {
+        pawnStructureScore -= 20 * (pawnCountInCol - 1);
+      }
+
+      // 2. خصم البيادق المعزولة (Isolated Pawns)
+      if (pawnCountInCol > 0) {
+        bool hasAdjacentPawn = false;
+        // التحقق من العمود الأيسر
+        if (col > 0) {
+          for (int row = 0; row < 8; row++) {
+            final piece = board.squares[row][col - 1];
+            if (piece != null &&
+                piece.type == PieceType.pawn &&
+                piece.color == playerColor) {
+              hasAdjacentPawn = true;
+              break;
+            }
+          }
+        }
+        // التحقق من العمود الأيمن
+        if (!hasAdjacentPawn && col < 7) {
+          for (int row = 0; row < 8; row++) {
+            final piece = board.squares[row][col + 1];
+            if (piece != null &&
+                piece.type == PieceType.pawn &&
+                piece.color == playerColor) {
+              hasAdjacentPawn = true;
+              break;
+            }
+          }
+        }
+        if (!hasAdjacentPawn) {
+          pawnStructureScore -= 10;
+        }
+      }
+
+      // 3. مكافأة البيادق المدعومة (Passed Pawns)
+      if (pawnCountInCol == 1) {
+        final int pawnRow = pawnRowsInCol.first;
+        bool isPassed = true;
+        // تحقق مما إذا كانت هناك بيادق للخصم أمام البيدق
+        for (
+          int enemyRow = pawnRow + direction;
+          enemyRow >= 0 && enemyRow < 8;
+          enemyRow += direction
+        ) {
+          if (board.squares[enemyRow][col] != null &&
+              board.squares[enemyRow][col]!.color != playerColor &&
+              board.squares[enemyRow][col]!.type == PieceType.pawn) {
+            isPassed = false;
+            break;
+          }
+        }
+        // تحقق من الأعمدة المجاورة
+        if (isPassed && col > 0) {
+          for (
+            int enemyRow = pawnRow + direction;
+            enemyRow >= 0 && enemyRow < 8;
+            enemyRow += direction
+          ) {
+            if (board.squares[enemyRow][col - 1] != null &&
+                board.squares[enemyRow][col - 1]!.color != playerColor &&
+                board.squares[enemyRow][col - 1]!.type == PieceType.pawn) {
+              isPassed = false;
+              break;
+            }
+          }
+        }
+        if (isPassed && col < 7) {
+          for (
+            int enemyRow = pawnRow + direction;
+            enemyRow >= 0 && enemyRow < 8;
+            enemyRow += direction
+          ) {
+            if (board.squares[enemyRow][col + 1] != null &&
+                board.squares[enemyRow][col + 1]!.color != playerColor &&
+                board.squares[enemyRow][col + 1]!.type == PieceType.pawn) {
+              isPassed = false;
+              break;
+            }
+          }
+        }
+        if (isPassed) {
+          pawnStructureScore += 30; // مكافأة كبيرة للبيدق المدعوم
+        }
+      }
+    }
+    return pawnStructureScore;
+  }
+
+  /// دالة مساعدة لتحديد ما إذا كانت اللعبة في مرحلة النهاية
+  bool _isEndgame(Board board) {
+    int totalNonPawnPieces = 0;
+    for (int r = 0; r < 8; r++) {
+      for (int c = 0; c < 8; c++) {
+        final piece = board.squares[r][c];
+        if (piece != null &&
+            piece.type != PieceType.pawn &&
+            piece.type != PieceType.king) {
+          totalNonPawnPieces++;
+        }
+      }
+    }
+
+    // يمكن تحديد نهاية اللعبة بناءً على عدد القطع المتبقية (مثال: أقل من 5 قطع غير البيادق)
+    return totalNonPawnPieces <= 5;
+  }
+
+  // قم بإضافة هذه الدالة المساعدة لتقييم أمان الملك
+  int _evaluateKingSafety(Board board, PieceColor playerColor) {
+    int kingSafetyScore = 0;
+    final kingPosition = board.kingPositions[playerColor];
+
+    if (kingPosition == null) {
+      return 0; // لا يوجد ملك، لا يمكن تقييم الأمان
+    }
+
+    // خصم كبير إذا كان الملك في كش
+    if (board.isKingInCheck(playerColor)) {
+      kingSafetyScore -= 90;
+    }
+
+    // مكافأة وجود بيادق تحمي الملك
+    final int kingRow = kingPosition.row;
+    final int kingCol = kingPosition.col;
+    final int pawnDirection = (playerColor == PieceColor.white) ? -1 : 1;
+
+    // فحص البيادق أمام الملك
+    for (int c = kingCol - 1; c <= kingCol + 1; c++) {
+      if (c >= 0 && c < 8) {
+        final piece = board.squares[kingRow + pawnDirection][c];
+        if (piece != null &&
+            piece.type == PieceType.pawn &&
+            piece.color == playerColor) {
+          kingSafetyScore += 10; // مكافأة على كل بيدق يغطي الملك
+        }
+      }
+    }
+
+    return kingSafetyScore;
+  }
+
+  // extension CheckGameConditions on GameRepositoryImpl {}
+
+  // دالة لترتيب الحركات (مثال بسيط: الأسر أولاً)
+  void _sortMoves(List<Move> moves, Board board) {
+    moves.sort((a, b) {
+      final bool aIsCapture = board.getPieceAt(a.end) != null;
+      final bool bIsCapture = board.getPieceAt(b.end) != null;
+
+      if (aIsCapture && !bIsCapture) {
+        return -1; // حركة A (أسر) قبل حركة B (ليست أسر)
+      } else if (!aIsCapture && bIsCapture) {
+        return 1; // حركة B (أسر) قبل حركة A (ليست أسر)
+      }
+      // يمكن إضافة المزيد من منطق الترتيب هنا (على سبيل المثال، MVV-LVA)
+      return 0; // لا يوجد فرق في الترتيب
+    });
+  }
+
+  // قم بإضافة هذه الدالة المساعدة لتقييم نشاط القطع
+  int _evaluatePieceActivity(Board board, PieceColor playerColor) {
+    int activityScore = 0;
+    // يمكنك استخدام طريقة board.getAllLegalMovesForCurrentPlayer()
+    // لتحديد عدد الحركات المتاحة، ولكن هذا قد يكون مكلفاً حسابياً.
+    // بديل أبسط: مكافأة القطع غير البيادق التي لا تزال في الصفوف الخلفية
+
+    // مكافأة للقطع المتقدمة (غير البيادق)
+    for (int r = 0; r < 8; r++) {
+      for (int c = 0; c < 8; c++) {
+        final piece = board.squares[r][c];
+        if (piece != null &&
+            piece.color == playerColor &&
+            piece.type != PieceType.pawn &&
+            piece.type != PieceType.king) {
+          final int rowDifference =
+              (playerColor == PieceColor.white) ? (7 - r) : r;
+          activityScore += rowDifference; // مكافأة للتقدم في الصفوف
+        }
+      }
+    }
+
+    return activityScore;
+  }
+
+  /// دالة مساعدة لإنشاء "مفتاح موقف" (FEN بدون عدادات الحركة).
+  /// تُستخدم للتحقق من التكرار الثلاثي.
+  String _boardToPositionKey(Board board) {
+    String fen = '';
+    for (int r = 0; r < 8; r++) {
+      int emptyCount = 0;
+      for (int c = 0; c < 8; c++) {
+        final piece = board.squares[r][c];
+        if (piece == null) {
+          emptyCount++;
+        } else {
+          if (emptyCount > 0) {
+            fen += '$emptyCount';
+            emptyCount = 0;
+          }
+          String pieceChar = '';
+          switch (piece.type) {
+            case PieceType.pawn:
+              pieceChar = 'p';
+              break;
+            case PieceType.rook:
+              pieceChar = 'r';
+              break;
+            case PieceType.knight:
+              pieceChar = 'n';
+              break;
+            case PieceType.bishop:
+              pieceChar = 'b';
+              break;
+            case PieceType.queen:
+              pieceChar = 'q';
+              break;
+            case PieceType.king:
+              pieceChar = 'k';
+              break;
+          }
+          fen +=
+              (piece.color == PieceColor.white
+                  ? pieceChar.toUpperCase()
+                  : pieceChar);
+        }
+      }
+      if (emptyCount > 0) {
+        fen += '$emptyCount';
+      }
+      if (r < 7) {
+        fen += '/';
+      }
+    }
+
+    // إضافة معلومات اللاعب الحالي وحقوق الكاستلينج وحركة الـ En Passant
+    fen += ' ${board.currentPlayer == PieceColor.white ? 'w' : 'b'}';
+
+    String castlingRightsStr = '';
+    if (board.castlingRights[PieceColor.white]![CastlingSide.kingSide]!) {
+      castlingRightsStr += 'K';
+    }
+    if (board.castlingRights[PieceColor.white]![CastlingSide.queenSide]!) {
+      castlingRightsStr += 'Q';
+    }
+    if (board.castlingRights[PieceColor.black]![CastlingSide.kingSide]!) {
+      castlingRightsStr += 'k';
+    }
+    if (board.castlingRights[PieceColor.black]![CastlingSide.queenSide]!) {
+      castlingRightsStr += 'q';
+    }
+    fen += ' ${castlingRightsStr.isEmpty ? '-' : castlingRightsStr}';
+
+    fen +=
+        ' ${board.enPassantTarget == null ? '-' : String.fromCharCode(97 + board.enPassantTarget!.col) + (8 - board.enPassantTarget!.row).toString()}';
+
+    return fen;
+  }
+
+  /// يتحقق مما إذا كانت اللوحة الحالية قد تكررت ثلاث مرات.
+  bool _isThreefoldRepetition(Board board) {
+    if (_boardHistory.length < 5) {
+      return false; // تحتاج على الأقل 5 لوحات لتكرار ثلاثي (3 مواقف متطابقة على الأقل)
+    }
+
+    // استخدام _boardToPositionKey للحصول على مفتاح الموقف
+    final currentPositionKey = _boardToPositionKey(board);
+    int count = 0;
+
+    // ابحث في سجل اللوحات (باستخدام مفتاح الموقف فقط)
+    for (final boardInHistory in _boardHistory) {
+      if (_boardToPositionKey(boardInHistory) == currentPositionKey) {
+        count++;
+      }
+    }
+    // إذا كان العدد 3 أو أكثر، فإنها تعادل.
+    return count >= 3;
+  }
+
+  /// يتحقق مما إذا كانت حالة اللعبة هي تعادل بسبب المواد غير الكافية.
+  bool _isInsufficientMaterialDraw(Board board) {
+    List<Piece> allPieces = [];
+    Map<Piece, Cell> piecePositions = {}; // لتخزين القطع ومواقعها
+
+    for (int r = 0; r < 8; r++) {
+      for (int c = 0; c < 8; c++) {
+        final piece = board.squares[r][c];
+        if (piece != null) {
+          allPieces.add(piece);
+          piecePositions[piece] = Cell(row: r, col: c);
+        }
+      }
+    }
+
+    // إذا كان هناك ملكان فقط
+    if (allPieces.length == 2 &&
+        allPieces.every((p) => p.type == PieceType.king)) {
+      return true; // ملك مقابل ملك
+    }
+
+    // الملك والأسقف مقابل الملك
+    if (allPieces.length == 3 &&
+        allPieces.where((p) => p.type == PieceType.king).length == 2 &&
+        allPieces.where((p) => p.type == PieceType.bishop).length == 1) {
+      return true;
+    }
+
+    // الملك والحصان مقابل الملك
+    if (allPieces.length == 3 &&
+        allPieces.where((p) => p.type == PieceType.king).length == 2 &&
+        allPieces.where((p) => p.type == PieceType.knight).length == 1) {
+      return true;
+    }
+
+    // الملك والأسقف مقابل الملك والأسقف (على نفس لون المربعات)
+    if (allPieces.length == 4 &&
+        allPieces.where((p) => p.type == PieceType.king).length == 2 &&
+        allPieces.where((p) => p.type == PieceType.bishop).length == 2) {
+      // الحصول على الأساقفة ومواقعهم
+      final List<Piece> bishops =
+          allPieces.where((p) => p.type == PieceType.bishop).toList();
+      final Cell? bishop1Cell = piecePositions[bishops[0]];
+      final Cell? bishop2Cell = piecePositions[bishops[1]];
+
+      if (bishop1Cell != null && bishop2Cell != null) {
+        // استخدام الامتداد CellColor للتحقق من لون المربع
+        final bool bishop1IsLight = bishop1Cell.isLightSquare();
+        final bool bishop2IsLight = bishop2Cell.isLightSquare();
+
+        // تعادل إذا كان كلا الأسقفين على نفس لون المربعات
+        return (bishop1IsLight && bishop2IsLight) ||
+            (!bishop1IsLight && !bishop2IsLight);
+      }
+    }
+
+    // يمكن إضافة المزيد من حالات المواد غير الكافية هنا إذا لزم الأمر
+    // مثال: ملك وحصانين مقابل ملك (غالباً ما تكون تعادل، لكن يمكن أن تكون فوزًا نادرًا)
+    // لا يتم تضمينها كتعادل تلقائي بشكل عام لأنها تتطلب تحليلاً أعمق.
+
     return false;
   }
 }
 
-// extension ZobristHashingImp on GameRepositoryImpl {
-//   void _initializeZobristKeys() {
-//     random = Random(42); // استخدام seed ثابت لأغراض الاختبار
-//     // تهيئة جدول zobrist بـ أرقام عشوائية
-
-//     // مفاتيح القطع والمربعات
-//     for (var type in PieceType.values) {
-//       _zobristPieceKeys[type] = {};
-//       for (var color in PieceColor.values) {
-//         _zobristPieceKeys[type]![color] = List.generate(
-//           8,
-//           (_) => List.generate(8, (_) => random.nextInt(0xFFFFFFFF)),
-//         );
-//       }
-//     }
-//     //  1^
-//     //
-//     //
-//     // مفاتيح الدور (للاعب الأبيض والأسود)
-//     _zobristSideToMoveKeys[PieceColor.white] = random.nextInt(0xFFFFFFFF);
-//     _zobristSideToMoveKeys[PieceColor.black] = random.nextInt(0xFFFFFFFF);
-
-//     // مفاتيح حقوق التبييت
-//     _zobristCastlingKeys[PieceColor.white] = {
-//       CastlingSide.kingSide: random.nextInt(0xFFFFFFFF),
-//       CastlingSide.queenSide: random.nextInt(0xFFFFFFFF),
-//     };
-//     _zobristCastlingKeys[PieceColor.black] = {
-//       CastlingSide.kingSide: random.nextInt(0xFFFFFFFF),
-//       CastlingSide.queenSide: random.nextInt(0xFFFFFFFF),
-//     };
-
-//     // مفاتيح الأسر بالمرور (لـ 8 أعمدة)
-//     for (int col = 0; col < 8; col++) {
-//       _zobristEnPassantKeys[col] = random.nextInt(0xFFFFFFFF);
-//     }
-//   }
-
-//   /// يحسب مفتاح Zobrist لموقف اللوحة الحالي.
-//   int _calculateZobristKey(Board board) {
-//     int hash = 0;
-
-//     // 1. القطع في المربعات
-//     for (int r = 0; r < 8; r++) {
-//       for (int c = 0; c < 8; c++) {
-//         final piece = board.squares[r][c];
-//         if (piece != null) {
-//           hash ^= _zobristPieceKeys[piece.type]![piece.color]![r][c];
-//         }
-//       }
-//     }
-
-//     // 2. الدور
-//     hash ^= _zobristSideToMoveKeys[board.currentPlayer]!;
-
-//     // 3. حقوق التبييت
-//     if (board.castlingRights[PieceColor.white]![CastlingSide.kingSide]!) {
-//       hash ^= _zobristCastlingKeys[PieceColor.white]![CastlingSide.kingSide]!;
-//     }
-//     if (board.castlingRights[PieceColor.white]![CastlingSide.queenSide]!) {
-//       hash ^= _zobristCastlingKeys[PieceColor.white]![CastlingSide.queenSide]!;
-//     }
-//     if (board.castlingRights[PieceColor.black]![CastlingSide.kingSide]!) {
-//       hash ^= _zobristCastlingKeys[PieceColor.black]![CastlingSide.kingSide]!;
-//     }
-//     if (board.castlingRights[PieceColor.black]![CastlingSide.queenSide]!) {
-//       hash ^= _zobristCastlingKeys[PieceColor.black]![CastlingSide.queenSide]!;
-//     }
-
-//     ///
-//     // 4. هدف الأسر بالمرور
-//     if (board.enPassantTarget != null) {
-//       hash ^= _zobristEnPassantKeys[board.enPassantTarget!.col]!;
-//     }
-
-//     return hash;
-//   }
-// }
+// extension CheckGameConditions on GameRepositoryImpl {}

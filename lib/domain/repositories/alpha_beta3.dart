@@ -15,65 +15,156 @@ class AlphaBeta3 extends AlphaBetaEvaluate {
     }
   }
   static int i = 0;
+  Map<NodeType, int> entryTransTable = {
+    NodeType.exact: 0,
+    NodeType.alpha: 0,
+    NodeType.beta: 0,
+  };
   Future<Move?> findBestMove(Board board, int depth) async {
-    i = 0; // Reset the counter for each call
-    final int zobristKey = board.zobristKey;
+    // 💡 قم بتهيئة ساعة توقيت لمراقبة الوقت
+    final stopwatch = Stopwatch()..start();
+    // 💡 تحديد الحد الأقصى للوقت المسموح به (مثلاً 3 ثوانٍ)
+    final Duration maxThinkTime = Duration(seconds: 3);
 
-    if (ZobristHashing.transpositionTable.containsKey(zobristKey)) {
-      final entry = ZobristHashing.transpositionTable[zobristKey]!;
-      if (entry.bestMove != null) {
-        return entry.bestMove; // إذا كان هناك نتيجة مخزنة، استخدمها
-      }
-    }
-    List<Move> moves = board.getAllLegalMovesForCurrentPlayer();
-
-    // 3. ترتيب الحركات: ضع أفضل حركة مخزنة أولاً
-    sortMoves(moves, board);
-    // هذا يزيد من كفاءة تقليم ألفا-بيتا
-    if (ZobristHashing.transpositionTable.containsKey(zobristKey) &&
-        ZobristHashing.transpositionTable[zobristKey]!.bestMove != null) {
-      final bestMoveFromTable =
-          ZobristHashing.transpositionTable[zobristKey]!.bestMove!;
-      // ضع أفضل حركة في بداية القائمة
-      moves.remove(bestMoveFromTable);
-      moves.insert(0, bestMoveFromTable);
-    }
     Move? bestMove;
-    int bestValue = -1000000; // قيمة أولية صغيرة جداً
-    // قم بضبط قيم ألفا وبيتا الأولية للبحث الأولي
-    int alpha = -1000000;
-    int beta = 1000000;
-    for (var move in moves) {
-      final newBoard = board.simulateMove(move);
-      final moveValue = await alphaBeta(
-        newBoard,
-        depth - 1,
-        alpha,
-        beta,
-        false,
-      );
 
-      if (moveValue > bestValue) {
-        bestValue = moveValue;
-        bestMove = move;
+    // 💡 أفضل قيمة تم العثور عليها حتى الآن
+    int bestScore = -1000000;
+
+    // 💡 حلقة التعميق التكراري
+    // تبدأ البحث من عمق 1 وتزيد العمق تدريجياً
+    for (int currentDepth = 1; currentDepth <= depth; currentDepth++) {
+      // 💡 إذا نفد الوقت، نوقف البحث
+      if (stopwatch.elapsed > maxThinkTime) {
+        break;
       }
 
-      // تحديث alpha بعد كل حركة، لأن getAiMove تعمل كلاعب معظّم
-      alpha = max(alpha, bestValue);
+      // 💡 الحصول على جميع الحركات القانونية
+      final List<Move> legalMoves = board.getAllLegalMovesForCurrentPlayer();
 
-      // إذا حدث تقليم هنا، يمكننا الخروج مبكراً
-      if (beta <= alpha) break;
+      // 💡 قم بتحديد قيم ألفا وبيتا الأولية لكل دورة
+      int alpha = -1000000;
+      int beta = 1000000;
+
+      Move? currentBestMove;
+      int currentBestScore = -1000000;
+
+      // 💡 ترتيب الحركات بناءً على أفضل حركة سابقة (إذا وجدت)
+      if (bestMove != null) {
+        legalMoves.remove(bestMove);
+        legalMoves.insert(0, bestMove);
+      }
+
+      // 💡 حلقة لتقييم كل حركة في العمق الحالي
+      for (final move in legalMoves) {
+        Board simulatedBoard = board.simulateMove(move);
+
+        // 💡 استدعاء alphaBeta من منظور الخصم (المقلل)
+        // playerColor here is opponent
+        int score = await alphaBeta(
+          simulatedBoard,
+          currentDepth - 1,
+          alpha,
+          beta,
+          false, // ❌ تم تصحيح الخطأ: الخصم سيلعب بعدنا
+        );
+
+        // 💡 تحديث أفضل حركة وأفضل قيمة في هذا العمق
+        if (score > currentBestScore) {
+          currentBestScore = score;
+          currentBestMove = move;
+        }
+
+        // 💡 تحديث ألفا في المستوى الأعلى
+        alpha = max(alpha, score);
+
+        // 💡 إذا حدث تقليم، نخرج من الحلقة
+        if (alpha >= beta) {
+          break;
+        }
+      }
+
+      // 💡 إذا كانت هناك أفضل حركة في هذا العمق، نقوم بحفظها
+      // هذا يضمن أن لدينا دائماً أفضل حركة حتى لو نفد الوقت
+      if (currentBestMove != null) {
+        bestMove = currentBestMove;
+        bestScore = currentBestScore;
+      }
+
+      // 💡 في نهاية كل دورة، يمكننا تخزين أفضل حركة ونتيجتها
+      // هذا ليس ضرورياً ولكنه يحسن أداء البحث التالي
+      ZobristHashing.transpositionTable[board.zobristKey] = TranspositionEntry(
+        score: bestScore,
+        depth: currentDepth,
+        type: NodeType.exact, // يمكن أن يكون هذا NodeType.ALPHA أو BETA
+        bestMove: bestMove,
+      );
     }
-    // 4. تخزين النتيجة النهائية وأفضل حركة في جدول التحويل
-    // هذا ضروري لتخزين النتيجة وأفضل حركة في جدول التحويل عند العمق الأقصى
-    ZobristHashing.transpositionTable[zobristKey] = TranspositionEntry(
-      score: bestValue,
-      depth: depth,
-      type: NodeType.exact,
-      bestMove: bestMove,
-    );
+
+    stopwatch.stop();
     return bestMove;
   }
+  // Future<Move?> findBestMove(Board board, int depth) async {
+
+  //   i = 0; // Reset the counter for each call
+  //   final int zobristKey = board.zobristKey;
+
+  //   if (ZobristHashing.transpositionTable.containsKey(zobristKey)) {
+  //     final entry = ZobristHashing.transpositionTable[zobristKey]!;
+  //     if (entry.bestMove != null) {
+  //       return entry.bestMove; // إذا كان هناك نتيجة مخزنة، استخدمها
+  //     }
+  //   }
+  //   List<Move> moves = board.getAllLegalMovesForCurrentPlayer();
+
+  //   // 3. ترتيب الحركات: ضع أفضل حركة مخزنة أولاً
+  //   sortMoves(moves, board);
+  //   // هذا يزيد من كفاءة تقليم ألفا-بيتا
+  //   if (ZobristHashing.transpositionTable.containsKey(zobristKey) &&
+  //       ZobristHashing.transpositionTable[zobristKey]!.bestMove != null) {
+  //     final bestMoveFromTable =
+  //         ZobristHashing.transpositionTable[zobristKey]!.bestMove!;
+  //     // ضع أفضل حركة في بداية القائمة
+  //     moves.remove(bestMoveFromTable);
+  //     moves.insert(0, bestMoveFromTable);
+  //   }
+
+  //   Move? bestMove;
+  //   int bestValue = -1000000; // قيمة أولية صغيرة جداً
+  //   // قم بضبط قيم ألفا وبيتا الأولية للبحث الأولي
+  //   int alpha = -1000000;
+  //   int beta = 1000000;
+  //   for (var move in moves) {
+  //     final newBoard = board.simulateMove(move);
+  //     final moveValue = await alphaBeta(
+  //       newBoard,
+  //       depth - 1,
+  //       alpha,
+  //       beta,
+  //       false,
+  //     );
+
+  //     if (moveValue > bestValue) {
+  //       bestValue = moveValue;
+  //       bestMove = move;
+  //     }
+
+  //     // تحديث alpha بعد كل حركة، لأن getAiMove تعمل كلاعب معظّم
+  //     alpha = max(alpha, bestValue);
+
+  //     // إذا حدث تقليم هنا، يمكننا الخروج مبكراً
+  //     if (beta <= alpha) break;
+  //   }
+  //   // 4. تخزين النتيجة النهائية وأفضل حركة في جدول التحويل
+  //   // هذا ضروري لتخزين النتيجة وأفضل حركة في جدول التحويل عند العمق الأقصى
+  //   ZobristHashing.transpositionTable[zobristKey] = TranspositionEntry(
+  //     score: bestValue,
+  //     depth: depth,
+  //     type: NodeType.exact,
+  //     bestMove: bestMove,
+  //   );
+  //   return bestMove;
+  // }
 
   Future<int> alphaBeta(
     Board board,
@@ -97,16 +188,13 @@ class AlphaBeta3 extends AlphaBetaEvaluate {
       // إذا كان العمق المخزن أكبر من أو يساوي العمق الحالي، يمكننا استخدام النتيجة
       if (entry.depth >= depth) {
         if (entry.type == NodeType.exact) {
-          //debugprint("Node type: Exact");
           return entry.score; // النتيجة دقيقة، أعدها مباشرة
         }
         if (entry.type == NodeType.alpha) {
-          //debugprint("Node type: Alpha");
           // النتيجة هي حد أدنى. إذا كانت أعلى من ألفا الحالي، حدث ألفا
           alpha = max(alpha, entry.score);
         }
         if (entry.type == NodeType.beta) {
-          // //debugprint("Node type: Beta");
           // النتيجة هي حد أقصى. إذا كانت أقل من بيتا الحالي، حدث بيتا
           beta = min(beta, entry.score);
         }
@@ -155,13 +243,15 @@ class AlphaBeta3 extends AlphaBetaEvaluate {
 
       // تحديد نوع العقدة
       if (bestValue <= alpha) {
-        // //debugprint("bestValue <= alpha");
+        entryTransTable[NodeType.beta] = entryTransTable[NodeType.beta]! + 1;
+
         nodeType = NodeType.beta; // القيمة هي حد أقصى (حدث تقليم)
       } else if (bestValue >= beta) {
-        //debugprint("bestValue >= beta");
+        entryTransTable[NodeType.alpha] = entryTransTable[NodeType.alpha]! + 1;
+
         nodeType = NodeType.alpha; // القيمة هي حد أدنى (حدث تقليم)
       } else {
-        //debugprint("bestValue == exact");
+        entryTransTable[NodeType.exact] = entryTransTable[NodeType.exact]! + 1;
         nodeType = NodeType.exact; // القيمة دقيقة
       }
     } else {
@@ -186,13 +276,13 @@ class AlphaBeta3 extends AlphaBetaEvaluate {
       }
       // تحديد نوع العقدة
       if (bestValue <= alpha) {
-        // //debugprint("bestValue <= alpha");
+        entryTransTable[NodeType.beta] = entryTransTable[NodeType.beta]! + 1;
         nodeType = NodeType.beta; // القيمة هي حد أقصى (حدث تقليم)
       } else if (bestValue >= beta) {
-        //debugprint("bestValue >= beta");
+        entryTransTable[NodeType.alpha] = entryTransTable[NodeType.alpha]! + 1;
         nodeType = NodeType.alpha; // القيمة هي حد أدنى (حدث تقليم)
       } else {
-        //debugprint("bestValue == exact");
+        entryTransTable[NodeType.exact] = entryTransTable[NodeType.exact]! + 1;
         nodeType = NodeType.exact; // القيمة دقيقة
       }
     }

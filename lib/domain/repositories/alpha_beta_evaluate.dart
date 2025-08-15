@@ -207,11 +207,11 @@ class AlphaBetaEvaluate {
     }
 
     // 2. تقييم هيكل البيادق
-    score += _evaluatePawnStructure(board, aiPlayerColor);
-    score -= _evaluatePawnStructure(
-      board,
-      aiPlayerColor == PieceColor.white ? PieceColor.black : PieceColor.white,
-    );
+    // score += _evaluatePawnStructure(board, aiPlayerColor);
+    // score -= _evaluatePawnStructure(
+    //   board,
+    //   aiPlayerColor == PieceColor.white ? PieceColor.black : PieceColor.white,
+    // );
 
     // 3. تقييم أمان الملك
     score += _evaluateKingSafety(board, aiPlayerColor);
