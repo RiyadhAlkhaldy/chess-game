@@ -4,7 +4,9 @@ import 'package:chess_gemini_2/domain/repositories/zobrist_hashing.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/chess_logic.dart';
-import '../../data/engine/ai_engine.dart';
+// import '../../data/engine/ai_engine.dart';
+import '../../data/engine/ai_engine copy 2.dart';
+import '../../data/engine/engine_board.dart';
 import '../../domain/repositories/game_repository.dart';
 import '../entities/export.dart';
 import 'simulate_move.dart';
@@ -420,8 +422,9 @@ class GameRepositoryImpl extends GameRepository {
     if (board.currentPlayer != aiPlayerColor) {
       // If mismatch happens (UI passes human color), still search from this position.
     }
-
-    final best = await engine.search(board);
+    final engineBoard = EngineBoard.fromBoard(board);
+    // final bestMove = await AiEngine().search(engineBoard);
+    final best = await engine.search(engineBoard);
     // Optionally store into existing Zobrist TT if available in your project:
     if (best != null) {
       final key = board.zobristKey;

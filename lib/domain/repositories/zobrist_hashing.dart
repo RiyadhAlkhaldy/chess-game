@@ -145,4 +145,63 @@ class ZobristHashing {
 
     return hash;
   }
+
+  void storeTT(int hash, TranspositionEntry entry) {
+    transpositionTable[hash] = entry;
+  }
+
+  TranspositionEntry? probeTT(int hash, int depth) {
+    final entry = transpositionTable[hash];
+    if (entry != null && entry.depth >= depth) {
+      return entry;
+    }
+    return null;
+  }
+
+  // ==== دوال مساعدة عامة لتحديث Zobrist تفاضلياً ====
+  // ملاحظة: هذه الدوال لا تغيّر أي حالة داخلية، فقط تعيد hash جديد بعد XORs.
+
+  /// XOR على خانة قطعة (إضافة/إزالة لنفس المفتاح هي نفسها)
+  static int togglePieceSquare(
+    int hash,
+    PieceType type,
+    PieceColor color,
+    int row,
+    int col,
+  ) {
+    return hash ^ _zobristPieceKeys[type]![color]![row][col];
+  }
+
+  /// تبديل دور اللعب: XOR بمفتاح اللاعب السابق ثم اللاعب اللاحق
+  static int toggleSideToMove(int hash, {required PieceColor from}) {
+    final to = (from == PieceColor.white) ? PieceColor.black : PieceColor.white;
+    hash ^= _zobristSideToMoveKeys[from]!;
+    hash ^= _zobristSideToMoveKeys[to]!;
+    return hash;
+  }
+
+  /// ضبط خانة En Passant: أزل القديم (إن وجد) وأضف الجديد (إن وجد)
+  static int setEnPassantFile(int hash, {int? prevFile, int? newFile}) {
+    if (prevFile != null) {
+      hash ^= _zobristEnPassantKeys[prevFile]!;
+    }
+    if (newFile != null) {
+      hash ^= _zobristEnPassantKeys[newFile]!;
+    }
+    return hash;
+  }
+
+  /// ضبط حق تبييت واحد: إذا تغيّر من prev إلى next نعمل XOR على مفتاح ذلك الحق.
+  static int setCastlingRight(
+    int hash, {
+    required PieceColor color,
+    required CastlingSide side,
+    required bool prev,
+    required bool next,
+  }) {
+    if (prev != next) {
+      hash ^= _zobristCastlingKeys[color]![side]!;
+    }
+    return hash;
+  }
 }
