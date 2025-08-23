@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:flutter/material.dart';
+
 import '../entities/export.dart';
 
 class ZobristHashing {
@@ -54,6 +56,7 @@ class ZobristHashing {
     for (int col = 0; col < 8; col++) {
       _zobristEnPassantKeys[col] = random.nextInt(0xFFFFFFFF);
     }
+    debugPrint('Zobrist keys initialized');
   }
 
   /// يحسب مفتاح Zobrist لموقف اللوحة الحالي.

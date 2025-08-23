@@ -4,9 +4,8 @@ import 'package:chess_gemini_2/domain/repositories/zobrist_hashing.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/chess_logic.dart';
-// import '../../data/engine/ai_engine.dart';
-import '../../data/engine/ai_engine copy 2.dart';
-import '../../data/engine/engine_board.dart';
+import '../../data/engine/ai_engine.dart';
+// import '../../data/engine/ai_engine_updated.dart';
 import '../../domain/repositories/game_repository.dart';
 import '../entities/export.dart';
 import 'simulate_move.dart';
@@ -43,8 +42,7 @@ class GameRepositoryImpl extends GameRepository {
   @override
   Board makeMove(Move move) {
     Board newBoard = currentBoard;
-    final Piece? pieceToMove = newBoard.getPieceAt(move.start);
-
+    Piece? pieceToMove = newBoard.getPieceAt(move.start);
     if (pieceToMove == null) {
       debugPrint("خطأ: لا توجد قطعة في خلية البداية.");
       return currentBoard; // لا تفعل شيئًا إذا لم تكن هناك قطعة
@@ -54,31 +52,8 @@ class GameRepositoryImpl extends GameRepository {
       return currentBoard; // لا تفعل شيئًا إذا لم يكن دور هذا اللاعب
     }
 
-    // تحديث hasMoved للقطعة التي تتحرك
-    final Piece updatedPiece = pieceToMove.copyWith(hasMoved: true);
-    newBoard = newBoard.placePiece(move.end, updatedPiece);
-    newBoard = newBoard.placePiece(
-      move.start,
-      null,
-    ); // إزالة القطعة من الخلية الأصلية
-
     // منطق الـ En Passant
     Cell? newEnPassantTarget;
-    // تحديد ما إذا كانت الحركة الحالية هي حركة بيدق مزدوجة
-    bool isCurrentMoveTwoStepPawnMove =
-        pieceToMove.type == PieceType.pawn &&
-        (move.end.row - move.start.row).abs() == 2;
-
-    if (isCurrentMoveTwoStepPawnMove) {
-      final int direction = pieceToMove.color == PieceColor.white ? 1 : -1;
-      newEnPassantTarget = Cell(
-        row: move.end.row + direction,
-        col: move.end.col,
-      );
-    }
-    if (!isCurrentMoveTwoStepPawnMove) {
-      newEnPassantTarget = null;
-    }
     if (move.isTwoStepPawnMove && pieceToMove.type == PieceType.pawn) {
       final int direction = pieceToMove.color == PieceColor.white ? 1 : -1;
       newEnPassantTarget = Cell(
@@ -96,67 +71,56 @@ class GameRepositoryImpl extends GameRepository {
         row: capturedPawnRow,
         col: move.end.col,
       );
-      newBoard = newBoard.placePiece(
-        capturedPawnCell,
-        null,
-      ); // إزالة البيدق المأسور
+      newBoard = newBoard.placePiece(capturedPawnCell, null);
     }
-
-    // منطق الكاستلينج
-    if (move.isCastling && pieceToMove.type == PieceType.king) {
-      final int kingRow = pieceToMove.color == PieceColor.white ? 7 : 0;
-      if (move.end.col == 6) {
-        // King-side castling
-        final Cell oldRookCell = Cell(row: kingRow, col: 7);
-        final Cell newRookCell = Cell(row: kingRow, col: 5);
-        final Rook? rook = newBoard.getPieceAt(oldRookCell) as Rook?;
-        if (rook != null) {
-          final Rook updatedRook = rook.copyWith(hasMoved: true);
-          newBoard = newBoard.placePiece(newRookCell, updatedRook);
-          newBoard = newBoard.placePiece(oldRookCell, null);
-        }
-      } else if (move.end.col == 2) {
-        // Queen-side castling
-        final Cell oldRookCell = Cell(row: kingRow, col: 0);
-        final Cell newRookCell = Cell(row: kingRow, col: 3);
-        final Rook? rook = newBoard.getPieceAt(oldRookCell) as Rook?;
-        if (rook != null) {
-          final Rook updatedRook = rook.copyWith(hasMoved: true);
-          newBoard = newBoard.placePiece(newRookCell, updatedRook);
-          newBoard = newBoard.placePiece(oldRookCell, null);
-        }
-      }
-    }
-
-    // منطق ترقية البيدق
-    if (move.isPromotion && pieceToMove.type == PieceType.pawn) {
-      // افتراض الترقية إلى ملكة إذا لم يحدد نوع آخر (يمكن توسيع هذا لاحقًا)
-      final promotedPiece = Queen(
-        color: pieceToMove.color,
-        type: PieceType.queen,
-        hasMoved: true,
-      );
-      newBoard = newBoard.placePiece(move.end, promotedPiece);
-    }
-    // تحديث حقوق الكاستلينج بعد حركة الملك أو الرخ
+    // 5. معالجة التبييت (Castling)
     Map<PieceColor, Map<CastlingSide, bool>> newCastlingRights = Map.from(
       newBoard.castlingRights,
     );
-
-    // إذا تحرك الملك، يفقد حقوق الكاستلينج
+    Map<PieceColor, Cell> newKingPositions = Map.from(newBoard.kingPositions);
+    // 3. تحديث موقع الملك (إذا كانت القطعة المتحركة ملكاً)
     if (pieceToMove.type == PieceType.king) {
-      newCastlingRights =
-          newCastlingRights..update(
-            pieceToMove.color,
-            (value) =>
-                Map.from(value)
-                  ..update(CastlingSide.kingSide, (value) => false)
-                  ..update(CastlingSide.queenSide, (value) => false),
-          );
-    }
-
-    // إذا تحرك الرخ من موضعه الأصلي، يفقد حقوق الكاستلينج لتلك الجهة
-    if (pieceToMove.type == PieceType.rook) {
+      newKingPositions[pieceToMove.color] = move.end;
+      if (!pieceToMove.hasMoved) {
+        newCastlingRights =
+            newCastlingRights..update(
+              pieceToMove.color,
+              (value) =>
+                  Map.from(value)
+                    ..update(CastlingSide.kingSide, (value) => false)
+                    ..update(CastlingSide.queenSide, (value) => false),
+            );
+      }
+      //   معالجة التبييت (Castling)
+      if (move.isCastling) {
+        final int kingRow = pieceToMove.color == PieceColor.white ? 7 : 0;
+        if (move.end.col == 6) {
+          // King-side castling
+          final Cell oldRookCell = Cell(row: kingRow, col: 7);
+          final Cell newRookCell = Cell(row: kingRow, col: 5);
+          final Rook? rook = newBoard.getPieceAt(oldRookCell) as Rook?;
+          if (rook != null) {
+            final Rook updatedRook = rook.copyWith(hasMoved: true);
+            newBoard = newBoard
+                .placePiece(newRookCell, updatedRook)
+                .placePiece(oldRookCell, null);
+          }
+        } else if (move.end.col == 2) {
+          // Queen-side castling
+          final Cell oldRookCell = Cell(row: kingRow, col: 0);
+          final Cell newRookCell = Cell(row: kingRow, col: 3);
+          final Rook? rook = newBoard.getPieceAt(oldRookCell) as Rook?;
+          if (rook != null) {
+            final Rook updatedRook = rook.copyWith(hasMoved: true);
+            newBoard = newBoard
+                .placePiece(newRookCell, updatedRook)
+                .placePiece(oldRookCell, null);
+          }
+        }
+      }
+    } else if (pieceToMove.type == PieceType.rook) {
+      // 8. تحديث حقوق التبييت
+      // إذا تحرك الرخ من موضعه الأصلي، يفقد حقوق الكاستلينج لتلك الجهة
       if (pieceToMove.color == PieceColor.white) {
         if (move.start == const Cell(row: 7, col: 0)) {
           // رخ أبيض يسار
@@ -200,57 +164,68 @@ class GameRepositoryImpl extends GameRepository {
         }
       }
     }
+
     // إذا تم أسر الرخ، يفقد حقوق الكاستلينج للخصم لتلك الجهة
     if (move.isCapture) {
-      // تحقق من الرخ الذي تم أسره (إذا كان رخ)
-      if (move.end == const Cell(row: 0, col: 0) &&
-          newBoard.getPieceAt(move.end)?.type == PieceType.rook) {
-        // رخ أسود يسار
-        newCastlingRights =
-            newCastlingRights..update(
-              PieceColor.black,
-              (value) =>
-                  Map.from(value)
-                    ..update(CastlingSide.queenSide, (value) => false),
-            );
-      } else if (move.end == const Cell(row: 0, col: 7) &&
-          newBoard.getPieceAt(move.end)?.type == PieceType.rook) {
-        // رخ أسود يمين
-        newCastlingRights =
-            newCastlingRights..update(
-              PieceColor.black,
-              (value) =>
-                  Map.from(value)
-                    ..update(CastlingSide.kingSide, (value) => false),
-            );
-      } else if (move.end == const Cell(row: 7, col: 0) &&
-          newBoard.getPieceAt(move.end)?.type == PieceType.rook) {
-        // رخ أبيض يسار
-        newCastlingRights =
-            newCastlingRights..update(
-              PieceColor.white,
-              (value) =>
-                  Map.from(value)
-                    ..update(CastlingSide.queenSide, (value) => false),
-            );
-      } else if (move.end == const Cell(row: 7, col: 7) &&
-          newBoard.getPieceAt(move.end)?.type == PieceType.rook) {
-        // رخ أبيض يمين
-        newCastlingRights =
-            newCastlingRights..update(
-              PieceColor.white,
-              (value) =>
-                  Map.from(value)
-                    ..update(CastlingSide.kingSide, (value) => false),
-            );
+      final pieceCaptured = currentBoard.getPieceAt(move.end);
+      if (pieceCaptured!.type == PieceType.rook) {
+        // تحقق من الرخ الذي تم أسره (إذا كان رخ)
+        if (move.end == const Cell(row: 0, col: 0)) {
+          // رخ أسود يسار
+          newCastlingRights =
+              newCastlingRights..update(
+                PieceColor.black,
+                (value) =>
+                    Map.from(value)
+                      ..update(CastlingSide.queenSide, (value) => false),
+              );
+        } else if (move.end == const Cell(row: 0, col: 7)) {
+          // رخ أسود يمين
+          newCastlingRights =
+              newCastlingRights..update(
+                PieceColor.black,
+                (value) =>
+                    Map.from(value)
+                      ..update(CastlingSide.kingSide, (value) => false),
+              );
+        } else if (move.end == const Cell(row: 7, col: 0)) {
+          // رخ أبيض يسار
+          newCastlingRights =
+              newCastlingRights..update(
+                PieceColor.white,
+                (value) =>
+                    Map.from(value)
+                      ..update(CastlingSide.queenSide, (value) => false),
+              );
+        } else if (move.end == const Cell(row: 7, col: 7)) {
+          // رخ أبيض يمين
+          newCastlingRights =
+              newCastlingRights..update(
+                PieceColor.white,
+                (value) =>
+                    Map.from(value)
+                      ..update(CastlingSide.kingSide, (value) => false),
+              );
+        }
       }
     }
-
-    // تحديث مواضع الملك
-    Map<PieceColor, Cell> newKingPositions = Map.from(newBoard.kingPositions);
-    if (pieceToMove.type == PieceType.king) {
-      newKingPositions[pieceToMove.color] = move.end;
+    // تحديث اللاعب الحالي
+    final PieceColor nextPlayer =
+        currentBoard.currentPlayer == PieceColor.white
+            ? PieceColor.black
+            : PieceColor.white;
+    if (move.isPromotion && move.movedPiece.type == PieceType.pawn) {
+      // افتراض الترقية إلى ملكة إذا لم يحدد نوع آخر (يمكن توسيع هذا لاحقًا)
+      pieceToMove = move.promotedTo;
     }
+    newBoard = newBoard
+        .placePiece(
+          move.end,
+          pieceToMove!.hasMoved
+              ? pieceToMove
+              : pieceToMove.copyWith(hasMoved: true),
+        )
+        .placePiece(move.start, null); // إزالة القطعة من الخلية الأصلية
 
     // تحديث HalfMoveClock
     int newHalfMoveClock = newBoard.halfMoveClock + 1;
@@ -263,12 +238,6 @@ class GameRepositoryImpl extends GameRepository {
     if (newBoard.currentPlayer == PieceColor.black) {
       newFullMoveNumber++; // يزداد بعد حركة اللاعب الأسود
     }
-
-    // تحديث اللاعب الحالي
-    final PieceColor nextPlayer =
-        currentBoard.currentPlayer == PieceColor.white
-            ? PieceColor.black
-            : PieceColor.white;
 
     newBoard = newBoard.copyWith(
       moveHistory: List.from(currentBoard.moveHistory)..add(move),
@@ -416,15 +385,15 @@ class GameRepositoryImpl extends GameRepository {
   ) async {
     // Respect clean architecture: repository coordinates the engine.
     final engine = AiEngine(
-      cfg: AiSearchConfig(maxDepth: aiDepth, timeMs: 6000),
+      cfg: AiSearchConfig(maxDepth: aiDepth, timeMs: 4000),
     );
     // Engine infers side-to-move from board.currentPlayer; aiPlayerColor is used for sanity if needed.
     if (board.currentPlayer != aiPlayerColor) {
       // If mismatch happens (UI passes human color), still search from this position.
     }
-    final engineBoard = EngineBoard.fromBoard(board);
-    // final bestMove = await AiEngine().search(engineBoard);
-    final best = await engine.search(engineBoard);
+    // final engineBoard = EngineBoard.fromBoard(board);
+    // final best = await engine.search(engineBoard);
+    final best = await engine.search(board);
     // Optionally store into existing Zobrist TT if available in your project:
     if (best != null) {
       final key = board.zobristKey;

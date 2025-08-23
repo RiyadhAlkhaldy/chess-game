@@ -57,7 +57,7 @@ class GameOptionsView extends StatelessWidget {
                   return Slider(
                     value: aiDepth.toDouble(),
                     min: 1,
-                    max: 6,
+                    max: 10,
                     divisions: 5,
                     label: 'AI Depth: ${aiDepth.round()}',
                     onChanged: (double value) {

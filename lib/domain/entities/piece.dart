@@ -88,6 +88,7 @@ extension ONPiece on Piece {
         return 0; // King has no value in terms of material
     }
   }
+
   /// Abstract method to get all possible raw moves for the piece, without considering
   /// whether the move puts the king in check.
   List<Move> getRawMoves(Board board, Cell currentCell) {
@@ -129,7 +130,12 @@ List<Move> getLinearMoves(
       if (targetPiece == null) {
         // Empty square, can move
         moves.add(
-          Move(start: currentCell, end: nextCell, movedPiece: movedPiece),
+          Move(
+            start: currentCell,
+            end: nextCell,
+            movedPiece: movedPiece,
+            fullMoveNumberBefore: board.fullMoveNumber,
+          ),
         );
       } else {
         // Square is occupied
@@ -141,6 +147,7 @@ List<Move> getLinearMoves(
               end: nextCell,
               isCapture: true,
               movedPiece: movedPiece,
+              fullMoveNumberBefore: board.fullMoveNumber,
             ),
           );
         }
@@ -171,11 +178,11 @@ abstract class King with _$King implements Piece {
   PieceType get type => PieceType.king;
 
   List<Move> getRawMoves(Board board, Cell currentCell) {
-    final movedPiece = Pawn(color: color, type: type, hasMoved: hasMoved);
+    final movedPiece = King(color: color, type: type, hasMoved: hasMoved);
 
     final moves = <Move>[];
     final offsets = [
-      [-1, -1],
+      [-1, -1], //top - left
       [-1, 0],
       [-1, 1],
       [0, -1],
@@ -201,6 +208,7 @@ abstract class King with _$King implements Piece {
               end: nextCell,
               isCapture: targetPiece != null,
               movedPiece: movedPiece,
+              fullMoveNumberBefore: board.fullMoveNumber,
             ),
           );
         }
@@ -395,6 +403,7 @@ abstract class Knight with _$Knight implements Piece {
               end: nextCell,
               isCapture: targetPiece != null,
               movedPiece: movedPiece,
+              fullMoveNumberBefore: board.fullMoveNumber,
             ),
           );
         }
@@ -447,6 +456,7 @@ abstract class Pawn with _$Pawn implements Piece {
             end: oneStepCell,
             isPromotion: true,
             movedPiece: movedPiece,
+            fullMoveNumberBefore: board.fullMoveNumber,
           ),
         );
       } else if (color == PieceColor.black && oneStepCell.row == 7) {
@@ -457,12 +467,18 @@ abstract class Pawn with _$Pawn implements Piece {
             end: oneStepCell,
             isPromotion: true,
             movedPiece: movedPiece,
+            fullMoveNumberBefore: board.fullMoveNumber,
           ),
         );
       } else {
         // Normal pawn move
         moves.add(
-          Move(start: currentCell, end: oneStepCell, movedPiece: movedPiece),
+          Move(
+            start: currentCell,
+            end: oneStepCell,
+            movedPiece: movedPiece,
+            fullMoveNumberBefore: board.fullMoveNumber,
+          ),
         );
       }
     }
@@ -483,6 +499,7 @@ abstract class Pawn with _$Pawn implements Piece {
           end: twoStepCell,
           isTwoStepPawnMove: true,
           movedPiece: movedPiece,
+          fullMoveNumberBefore: board.fullMoveNumber,
         ),
       );
     }
@@ -501,11 +518,18 @@ abstract class Pawn with _$Pawn implements Piece {
     if (captureLeftCell.isValid()) {
       final targetPiece = board.getPieceAt(captureLeftCell);
       if (targetPiece != null && targetPiece.color != color) {
+        final isPromotion =
+            color == PieceColor.white && captureLeftCell.row == 0 ||
+            color == PieceColor.black && captureLeftCell.row == 7;
         moves.add(
           Move(
             start: currentCell,
             end: captureLeftCell,
             isCapture: true,
+            capturedCell: captureLeftCell,
+            isPromotion: isPromotion,
+            capturedPiece: targetPiece,
+            previousFullMoveNumber: board.fullMoveNumber,
             movedPiece: movedPiece,
           ),
         );
@@ -516,12 +540,19 @@ abstract class Pawn with _$Pawn implements Piece {
     if (captureRightCell.isValid()) {
       final targetPiece = board.getPieceAt(captureRightCell);
       if (targetPiece != null && targetPiece.color != color) {
+        final isPromotion =
+            color == PieceColor.white && captureRightCell.row == 0 ||
+            color == PieceColor.black && captureRightCell.row == 7;
         moves.add(
           Move(
             start: currentCell,
             end: captureRightCell,
             isCapture: true,
             movedPiece: movedPiece,
+            capturedPiece: targetPiece,
+            isPromotion: isPromotion,
+            capturedCell: captureRightCell,
+            fullMoveNumberBefore: board.fullMoveNumber,
           ),
         );
       }

@@ -95,7 +95,7 @@ class GameController extends GetxController {
     // مراقبة تغيير اللاعب الحالي لتشغيل دور الذكاء الاصطناعي.
     ever(board, (_) {
       _checkGameStatus();
-      _handleAiTurn();
+      // _handleAiTurn();
     });
     _updateBoardState();
   }
@@ -144,10 +144,10 @@ class GameController extends GetxController {
 
     // السماح بالحركة فقط إذا كان الدور للاعب البشري.
     // Allow moves only if it's the human player's turn.
-    if (board.value.currentPlayer != humanPlayerColor) {
-      debugPrint('ليس دورك يا لاعب! انتظر الذكاء الاصطناعي.');
-      return; // منع اللاعب من اللعب في دور الذكاء الاصطناعي
-    }
+    // if (board.value.currentPlayer != humanPlayerColor) {
+    //   debugPrint('ليس دورك يا لاعب! انتظر الذكاء الاصطناعي.');
+    //   return; // منع اللاعب من اللعب في دور الذكاء الاصطناعي
+    // }
 
     final Piece? pieceAtCell = board.value.getPieceAt(cell);
     debugPrint(cell.toString());
@@ -188,11 +188,24 @@ class GameController extends GetxController {
   /// يحاول تنفيذ حركة من الخلية [startCell] إلى الخلية [endCell].
   /// Tries to execute a move from [startCell] to [endCell].
   void _tryMove(Cell startCell, Cell endCell) async {
-    final move = legalMoves.firstWhereOrNull(
+    Move? move = legalMoves.firstWhereOrNull(
       (m) => m.start == startCell && m.end == endCell,
     );
 
     if (move != null) {
+      // منطق ترقية البيدق
+      if (move.isPromotion && move.movedPiece.type == PieceType.pawn) {
+        // افتراض الترقية إلى ملكة إذا لم يحدد نوع آخر (يمكن توسيع هذا لاحقًا)
+        final promotedPiece = Queen(
+          color: move.movedPiece.color,
+          type: PieceType.queen,
+          hasMoved: true,
+        );
+        move = move.copyWith(
+          promotedTo: promotedPiece,
+          promotedPieceType: promotedPiece.type,
+        );
+      }
       _makeMove.execute(move);
       _playSoundUseCase.executeMoveSound();
 
@@ -321,4 +334,8 @@ class GameController extends GetxController {
       Get.snackbar('تم الرفض!', 'تم رفض عرض التعادل. اللعبة مستمرة.');
     }
   }
+
+  void resign() {}
+  void undoMove() {}
+  void redoMove() {}
 }

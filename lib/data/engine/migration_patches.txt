@@ -1,0 +1,30 @@
+*** PATCH 1: entities_chess_game.dart (Board.simulateMove) ***
+@@
+-  Board simulateMove(Move move, [Board? boardParameter]) {
+-    return SimulateMove.simulateMove(boardParameter ?? this, move);
+-  }
++  /// استبدال محاكاة النقلات باستخدام makeMove/unMakeMove (الأكثر أماناً وأسرع مع Zobrist).
++  /// ملاحظة: نحافظ على نفس الواجهة لأجل التوافق مع بقية الطبقات.
++  Board simulateMove(Move move, [Board? boardParameter]) {
++    final b = boardParameter ?? this;
++    return b.makeMove(move);
++  }
+*** PATCH 2: game_repository_impl.dart ***
+@@
+-import 'simulate_move.dart';
++// import 'simulate_move.dart'; // لم تعد مطلوبة بعد الانتقال إلى makeMove/unMakeMove
+@@
+-  @override
+-  Board simulateMove(Board board, Move move) {
+-    // debugPrint("simulateMove");
+-
+-    return SimulateMove.simulateMove(board, move);
+-  }
++  @override
++  /// استخدام Board.makeMove بدل SimulateMove لأداء أفضل وتوحيد المعيارية.
++  Board simulateMove(Board board, Move move) {
++    return board.makeMove(move);
++  }
+@@
+-        Board simulatedBoard = board.simulateMove(move);
++        Board simulatedBoard = board.makeMove(move);

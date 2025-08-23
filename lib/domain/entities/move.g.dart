@@ -27,24 +27,8 @@ _Move _$MoveFromJson(Map<String, dynamic> json) => _Move(
       json['promotedTo'] == null
           ? null
           : Piece.fromJson(json['promotedTo'] as Map<String, dynamic>),
-  enPassantTargetBefore:
-      json['enPassantTargetBefore'] == null
-          ? null
-          : Cell.fromJson(
-            json['enPassantTargetBefore'] as Map<String, dynamic>,
-          ),
-  wasFirstMoveKing: json['wasFirstMoveKing'] as bool?,
-  wasFirstMoveRook: json['wasFirstMoveRook'] as bool?,
   halfMoveClockBefore: (json['halfMoveClockBefore'] as num?)?.toInt(),
   fullMoveNumberBefore: (json['fullMoveNumberBefore'] as num?)?.toInt(),
-  castlingRookFrom:
-      json['castlingRookFrom'] == null
-          ? null
-          : Cell.fromJson(json['castlingRookFrom'] as Map<String, dynamic>),
-  castlingRookTo:
-      json['castlingRookTo'] == null
-          ? null
-          : Cell.fromJson(json['castlingRookTo'] as Map<String, dynamic>),
 );
 
 Map<String, dynamic> _$MoveToJson(_Move instance) => <String, dynamic>{
@@ -59,13 +43,8 @@ Map<String, dynamic> _$MoveToJson(_Move instance) => <String, dynamic>{
   'movedPiece': instance.movedPiece,
   'capturedPiece': instance.capturedPiece,
   'promotedTo': instance.promotedTo,
-  'enPassantTargetBefore': instance.enPassantTargetBefore,
-  'wasFirstMoveKing': instance.wasFirstMoveKing,
-  'wasFirstMoveRook': instance.wasFirstMoveRook,
   'halfMoveClockBefore': instance.halfMoveClockBefore,
   'fullMoveNumberBefore': instance.fullMoveNumberBefore,
-  'castlingRookFrom': instance.castlingRookFrom,
-  'castlingRookTo': instance.castlingRookTo,
 };
 
 const _$PieceTypeEnumMap = {

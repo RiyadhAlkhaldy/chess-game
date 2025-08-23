@@ -128,7 +128,7 @@ abstract class Board with _$Board {
       PieceColor.black: const Cell(row: 0, col: 4),
     };
     // Initial FEN for the starting position - FEN الأولي للوضعية الافتتاحية
-    final initialFen = _boardToFen(
+    final initialFen = boardToFen(
       initialSquares,
       PieceColor.white,
       initialKingPositions,
@@ -344,7 +344,7 @@ abstract class Board with _$Board {
     // 6. رقم الحركة الكاملة
     final fullMoveNumber = int.parse(parts[5]);
 
-    final initialFen = _boardToFen(
+    final initialFen = boardToFen(
       squares,
       currentPlayer,
       kingPositions,
@@ -433,7 +433,8 @@ extension OnBoard on Board {
   /// يُرجع مثيل Board جديدًا مع وضع قطعة (أو إزالتها إذا كانت القطعة null)
   /// في الخلية المحددة. هذا تحديث غير قابل للتغيير.
   Board placePiece(Cell cell, Piece? piece) {
-    final newSquares = squares.map((row) => List<Piece?>.from(row)).toList();
+    // final newSquares = squares.map((row) => List<Piece?>.from(row)).toList();
+    final newSquares = squares.map((r) => List<Piece?>.from(r)).toList();
     newSquares[cell.row][cell.col] = piece;
     return copyWith(squares: newSquares);
   }
@@ -616,7 +617,7 @@ extension WithBoard on Board {
 }
 
 // دالة مساعدة لتحويل اللوحة إلى FEN (لاستخدامها في Board.initial)
-String _boardToFen(
+String boardToFen(
   List<List<Piece?>> squares,
   PieceColor currentPlayer,
   Map<PieceColor, Cell> kingPositions,

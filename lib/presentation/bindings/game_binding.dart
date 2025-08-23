@@ -3,13 +3,11 @@ import 'package:chess_gemini_2/domain/usecases/play_sound_usecase.dart';
 import 'package:get/get.dart';
 
 import '../../data/local_storage_service.dart';
-import '../../domain/repositories/ai_game_repository_impl.dart';
 import '../../domain/repositories/audio_player_service_impl.dart';
 import '../../domain/repositories/game_repository.dart';
 import '../../domain/repositories/game_repository_impl.dart';
 import '../../domain/services/audio_service.dart';
 import '../../domain/usecases/get_ai_move.dart';
-import '../../domain/usecases/get_ai_move_use_case.dart';
 import '../../domain/usecases/get_board_state.dart';
 import '../../domain/usecases/get_game_result.dart';
 import '../../domain/usecases/get_legal_moves.dart';
@@ -25,15 +23,11 @@ import '../controllers/get_options_controller.dart';
 class GameBinding extends Bindings {
   @override
   void dependencies() {
-    // تسجيل AIGameRepositoryImpl كمفرد (singleton)
-    // Register AIGameRepositoryImpl as a singleton
-    Get.lazyPut<AIGameRepositoryImpl>(() => AIGameRepositoryImpl());
-
     // تسجيل GetAIMoveUseCase
     // Register GetAIMoveUseCase
-    Get.lazyPut<GetAIMoveUseCase>(
-      () => GetAIMoveUseCase(Get.find<AIGameRepositoryImpl>()),
-    );
+    // Get.lazyPut<GetAIMoveUseCase>(
+    //   () => GetAIMoveUseCase(Get.find<AIGameRepositoryImpl>()),
+    // );
 
     // Data Layer: Register concrete implementations of services and repositories
     Get.lazyPut<LocalStorageService>(

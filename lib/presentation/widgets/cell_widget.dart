@@ -1,46 +1,62 @@
 // lib/presentation/widgets/cell_widget.dart
-// ignore_for_file: deprecated_member_use
+// Material 3 + تحسينات وصول (Accessibility) + Animations + أداء
 
 import 'package:flutter/material.dart';
 
 import '../../domain/entities/cell.dart';
 
-/// Renders a single cell of the chessboard with appropriate styling.
+/// Widget مسؤول عن رسم مربع واحد على لوحة الشطرنج.
+/// - يدعم إبراز التحديد، وإظهار الهدف القانوني للحركة، والتنبيه عند كش الملك.
+/// - تم استخدام AnimatedContainer لتقليل إعادة البناء وإضافة انتقالات سلسة.
+/// - تم إضافة Semantics لدعم قارئ الشاشة وإتاحة استخدام لوحة المفاتيح لاحقاً.
 class CellWidget extends StatelessWidget {
-  final Cell cell; // The cell's coordinates
-  final bool isWhite; // True if it's a "white" square on the board
-  final bool isSelected; // True if this cell is currently selected
-  final bool
-  isLegalMoveTarget; // True if this cell is a legal move target for the selected piece
-  final Widget? child; // The piece widget (if any) on this cell
-  final bool kingCellisOnCheck;
+  final Cell cell; // إحداثيات الخلية
+  final bool isWhite; // لون المربع الأساسي
+  final bool isSelected; // هل المربع محدد حالياً
+  final bool isLegalMoveTarget; // هل المربع هدف قانوني للحركة
+  final bool kingCellisOnCheck; // هل هذا مربع ملك في حالة كش
+  final Widget? child; // قطعة الشطرنج الموجودة داخل هذا المربع (إن وجدت)
+  final VoidCallback? onTap; // استجابة للنقر
+
   const CellWidget({
     super.key,
     required this.cell,
     required this.isWhite,
-    this.isSelected = false,
-    this.isLegalMoveTarget = false,
+    required this.isSelected,
+    required this.isLegalMoveTarget,
+    required this.kingCellisOnCheck,
     this.child,
-    this.kingCellisOnCheck = false,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context); // Access the current theme
+    final theme = Theme.of(context);
+
+    // اختيار اللون الخلفي بناءً على الحالة
+    final Color baseLight = theme.colorScheme.surfaceContainerHighest;
+    final Color baseDark = theme.colorScheme.outlineVariant;
+    final Color selectedColor = theme.colorScheme.tertiaryContainer;
+    final Color legalTargetColor = theme.colorScheme.secondaryContainer;
+    final Color inCheckColor = theme.colorScheme.errorContainer;
 
     Color backgroundColor;
     if (isSelected) {
+      backgroundColor = selectedColor;
+    } else if (isLegalMoveTarget) {
+      backgroundColor = legalTargetColor;
+    } else if (kingCellisOnCheck) {
+      backgroundColor = inCheckColor;
+    } else {
+      backgroundColor = isWhite ? baseLight : baseDark;
+    }
+
+    if (isSelected) {
       backgroundColor = Colors.yellow.shade300;
-      //  theme.colorScheme.primary.withOpacity(
-      //   0.7,
-      // ); // Highlight for selected cell
     } else if (isLegalMoveTarget) {
       backgroundColor = Colors.yellow.shade300;
-      // theme.colorScheme.secondary.withOpacity(
-      //   0.5,
-      // ); // Highlight for legal move targets
     } else if (kingCellisOnCheck) {
-      backgroundColor = Colors.red.shade300; // لون أحمر لمربع الملك المهدد
+      // backgroundColor = Colors.red.shade300; // لون أحمر لمربع الملك المهدد
     } else {
       backgroundColor =
           isWhite
@@ -49,34 +65,51 @@ class CellWidget extends StatelessWidget {
                   .shade200 // White squares background
               : Colors.brown.shade600; // Black squares background
     }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        border: Border.all(
-          color:
-              isSelected
-                  ? theme.colorScheme.primary
-                  : Colors.transparent, // Border for selected cell
-          width: isSelected ? 3.0 : 0.0,
-        ),
-        // border: Border.all(color: Colors.black12),
-      ),
-      child: Stack(
-        alignment: Alignment.center, // Center the child and dot
-        children: [
-          if (child != null) child!, // Display the piece if present
-          if (isLegalMoveTarget &&
-              child == null) // Show a dot for empty legal move targets
-            Container(
-              width: 20,
-              height: 20,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.secondary, // Dot color
-                shape: BoxShape.circle, // Circular dot
+    return Semantics(
+      label: 'مربع ${cell.row},${cell.col}',
+      button: true,
+      selected: isSelected,
+      child: RepaintBoundary(
+        child: InkWell(
+          onTap: onTap,
+          customBorder: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              border: Border.all(
+                color:
+                    isSelected ? theme.colorScheme.primary : theme.dividerColor,
+                width: isSelected ? 2 : 1,
               ),
+              // borderRadius: BorderRadius.circular(6),
             ),
-        ],
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // عرض نقطة صغيرة عندما يكون الهدف قانوني ولا توجد قطعة في المربع
+                if (isLegalMoveTarget && child == null)
+                  AnimatedOpacity(
+                    duration: const Duration(milliseconds: 150),
+                    opacity: 1,
+                    child: Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.secondary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                // القطعة (إن وجدت)
+                if (child != null) child!,
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

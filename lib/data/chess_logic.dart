@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 import '../domain/entities/board.dart';
 import '../domain/entities/cell.dart';
 import '../domain/entities/move.dart';
@@ -6,6 +8,10 @@ import '../domain/repositories/simulate_move.dart';
 
 class ChessLogic {
   static bool isMoveResultingInCheck(Board board, Move move) {
+    // board = board.makeMove(move);
+    // final isKingInCheck = board.isKingInCheck(board.currentPlayer);
+    // board = board.unMakeMove(move: move);
+    // return isKingInCheck;
     final simulatedBoard = SimulateMove.simulateMove(board, move);
     return simulatedBoard.isKingInCheck(board.currentPlayer);
   }
@@ -40,21 +46,19 @@ class ChessLogic {
 
     // الحصول على الحركات الأولية للقطعة (بغض النظر عن الكش)
     final rawMoves = piece.getRawMoves(boardToUse, cell);
-
+    // إضافة حركات En Passant القانونية (يتم التحقق منها هنا بشكل كامل)
+    // if (piece.type == PieceType.pawn) {
+    // _addEnPassantMoves(rawMoves, cell, piece.color, boardToUse);
+    // }
+    // إضافة حركات الكاستلينج القانونية (يتم التحقق منها هنا بشكل كامل)
+    // if (piece.type == PieceType.king) {
+    // _addCastlingMoves(rawMoves, cell, piece.color, boardToUse);
+    // }
     // تصفية الحركات لإزالة تلك التي تضع الملك في كش
     final legalMoves =
         rawMoves.where((move) {
           return !isMoveResultingInCheck(boardToUse, move);
         }).toList();
-
-    // إضافة حركات الكاستلينج القانونية (يتم التحقق منها هنا بشكل كامل)
-    if (piece.type == PieceType.king) {
-      _addCastlingMoves(legalMoves, cell, piece.color, boardToUse);
-    }
-    // إضافة حركات En Passant القانونية (يتم التحقق منها هنا بشكل كامل)
-    if (piece.type == PieceType.pawn) {
-      _addEnPassantMoves(legalMoves, cell, piece.color, boardToUse);
-    }
 
     return legalMoves;
   }
@@ -72,7 +76,7 @@ class ChessLogic {
     if (board.isKingInCheck(kingColor)) {
       return; // لا يمكن الكاستلينج إذا كان الملك في كش
     }
-
+    debugPrint(kingColor.toString());
     final int kingRow = kingColor == PieceColor.white ? 7 : 0;
 
     // الكاستلينج لجهة الملك (King-side Castling)
@@ -97,8 +101,9 @@ class ChessLogic {
                 type: PieceType.king,
                 hasMoved: true,
               ),
-              castlingRookFrom: rookCell,
-              castlingRookTo: Cell(row: kingRow, col: 5),
+              rookFrom: rookCell,
+              rookTo: Cell(row: kingRow, col: 5),
+              fullMoveNumberBefore: board.fullMoveNumber,
             ),
           );
         }
@@ -117,8 +122,7 @@ class ChessLogic {
           board.getPieceAt(Cell(row: kingRow, col: 1)) == null) {
         // التحقق من أن المربعات التي يمر بها الملك ليست مهددة
         if (!board.isCellUnderAttack(kingColor, Cell(row: kingRow, col: 3)) &&
-            !board.isCellUnderAttack(kingColor, Cell(row: kingRow, col: 2)) &&
-            !board.isCellUnderAttack(kingColor, Cell(row: kingRow, col: 1))) {
+            !board.isCellUnderAttack(kingColor, Cell(row: kingRow, col: 2))) {
           moves.add(
             Move(
               start: kingCell,
@@ -129,8 +133,9 @@ class ChessLogic {
                 type: PieceType.king,
                 hasMoved: true,
               ),
-              castlingRookFrom: rookCell,
-              castlingRookTo: Cell(row: kingRow, col: 3),
+              rookFrom: rookCell,
+              rookTo: Cell(row: kingRow, col: 3),
+              fullMoveNumberBefore: board.fullMoveNumber,
             ),
           );
         }
@@ -162,28 +167,29 @@ class ChessLogic {
         final Piece? adjacentPiece = board.getPieceAt(adjacentCell);
         if (adjacentPiece is Pawn &&
             adjacentPiece.color != pawnColor &&
-            board.enPassantTarget ==
-                Cell(row: targetRow, col: adjacentCell.col) &&
-            board.moveHistory.isNotEmpty) {
+            board.enPassantTarget == Cell(row: targetRow, col: adjacentCell.col)
+        // && board.moveHistory.isNotEmpty
+        ) {
           // التحقق مما إذا كانت الحركة الأخيرة هي حركة بيدق مزدوجة للبيدق المستهدف
-          final lastMove = board.moveHistory.last;
-          if (lastMove.isTwoStepPawnMove && lastMove.end == adjacentCell) {
-            moves.add(
-              Move(
-                start: pawnCell,
-                end: board.enPassantTarget!,
-                isEnPassant: true,
-                isCapture: true, // En Passant هو نوع من أنواع الأسر
-                movedPiece: Pawn(
-                  color: pawnColor,
-                  type: PieceType.pawn,
-                  hasMoved: true,
-                ),
-                capturedPiece: board.getPieceAt(board.enPassantTarget!),
-                // enPassantTargetBefore: board.enPassantTarget,
+          // final lastMove = board.moveHistory.last;
+          // if (lastMove.isTwoStepPawnMove && lastMove.end == adjacentCell) {
+          moves.add(
+            Move(
+              start: pawnCell,
+              end: board.enPassantTarget!,
+              isEnPassant: true,
+              isCapture: true, // En Passant هو نوع من أنواع الأسر
+              movedPiece: Pawn(
+                color: pawnColor,
+                type: PieceType.pawn,
+                hasMoved: true,
               ),
-            );
-          }
+              capturedPiece: board.getPieceAt(board.enPassantTarget!),
+              fullMoveNumberBefore: board.fullMoveNumber,
+              // enPassantTargetBefore: board.enPassantTarget,
+            ),
+          );
+          // }
         }
       }
     }

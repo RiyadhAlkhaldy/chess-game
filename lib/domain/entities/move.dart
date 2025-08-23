@@ -1,4 +1,6 @@
 // lib/domain/entities/move.dart
+// ignore_for_file: invalid_annotation_target
+
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'cell.dart';
@@ -26,13 +28,31 @@ abstract class Move with _$Move {
     required Piece movedPiece,
     Piece? capturedPiece,
     Piece? promotedTo,
-    Cell? enPassantTargetBefore,
-    bool? wasFirstMoveKing,
-    bool? wasFirstMoveRook,
+    // Cell? enPassantTargetBefore,
+    // bool? wasFirstMoveKing,
+    // bool? wasFirstMoveRook,
     int? halfMoveClockBefore,
     int? fullMoveNumberBefore,
-    Cell? castlingRookFrom,
-    Cell? castlingRookTo,
+    // Cell? castlingRookFrom,
+    // Cell? castlingRookTo,
+    // === Reversible payload for fast unMake (ignored by JSON) ===
+    // @JsonKey(ignore: true) Piece? capturedPiece,
+    @JsonKey(ignore: true) Cell? capturedCell,
+    @JsonKey(ignore: true) Piece? movedPieceBefore,
+
+    // Castling rook info
+    @JsonKey(ignore: true) Cell? rookFrom,
+    @JsonKey(ignore: true) Cell? rookTo,
+    @JsonKey(ignore: true) Piece? rookBefore,
+
+    // Snapshot of prior board state
+    @JsonKey(ignore: true)
+    Map<PieceColor, Map<CastlingSide, bool>>? previousCastlingRights,
+    @JsonKey(ignore: true) Cell? previousEnPassantTarget,
+    @JsonKey(ignore: true) int? previousHalfMoveClock,
+    @JsonKey(ignore: true) int? previousFullMoveNumber,
+    @JsonKey(ignore: true) Map<PieceColor, Cell>? previousKingPositions,
+    @JsonKey(ignore: true) int? previousZobristKey,
   }) = _Move;
 
   factory Move.fromJson(Map<String, dynamic> json) => _$MoveFromJson(json);
